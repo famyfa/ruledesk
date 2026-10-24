@@ -25,6 +25,17 @@ export interface WorkingCopy {
 
 const HISTORY_LIMIT = 200;
 
+declare const crypto: { randomUUID(): string };
+
+/**
+ * Ids for objects created locally: `new:<uuid>`. The uuid is the one the object
+ * will get on the firewall (created by upsert), so the same object has the same
+ * identity on every site and a retried apply can't create duplicates.
+ */
+export function newLocalId(): string {
+  return `new:${crypto.randomUUID()}`;
+}
+
 export class WorkingCopyError extends Error {}
 
 export type RulePatch = Partial<Omit<FirewallRule, "id" | "origin" | "prioGroup" | "sortOrder">>;
@@ -155,7 +166,7 @@ export function addRule(
   wc: WorkingCopy,
   opts: { afterId?: string; patch?: RulePatch } = {},
 ): { wc: WorkingCopy; id: string } {
-  const id = `new:${wc.current.nextLocalId}`;
+  const id = newLocalId();
   const anchor = opts.afterId ? wc.current.rules.find((r) => r.id === opts.afterId) : undefined;
   const rule: FirewallRule = {
     ...newRuleTemplate(id, anchor?.prioGroup),
@@ -176,7 +187,7 @@ export function addRule(
 export function cloneRule(wc: WorkingCopy, sourceId: string): { wc: WorkingCopy; id: string } {
   const source = findRule(wc.current, sourceId);
   assertEditable(source);
-  const id = `new:${wc.current.nextLocalId}`;
+  const id = newLocalId();
   // Rules are plain JSON data, so a JSON round-trip is a safe deep copy.
   const clone: FirewallRule = { ...(JSON.parse(JSON.stringify(source)) as FirewallRule), id, prioGroup: source.prioGroup };
   const next = commit(wc, {
@@ -241,7 +252,7 @@ export function addAlias(wc: WorkingCopy, alias: Omit<Alias, "id">): { wc: Worki
   if (findAliasByName(wc.current, alias.name)) {
     throw new WorkingCopyError(`An alias named "${alias.name}" already exists.`);
   }
-  const id = `new:${wc.current.nextLocalId}`;
+  const id = newLocalId();
   const next = commit(wc, {
     ...wc.current,
     aliases: [...wc.current.aliases, { ...alias, id }],

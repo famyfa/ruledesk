@@ -59,10 +59,10 @@ describe("change sets", () => {
   });
 
   it("reports clones as creates and deletes as deletes", () => {
-    let { wc } = cloneRule(base(), "r2");
-    wc = deleteRules(wc, ["r3"]);
+    const cloned = cloneRule(base(), "r2");
+    const wc = deleteRules(cloned.wc, ["r3"]);
     const kinds = computeChangeSet(wc).changes.map((c) => `${c.kind}:${c.id}`);
-    expect(kinds).toEqual(["create:new:1", "delete:r3"]);
+    expect(kinds).toEqual([`create:${cloned.id}`, "delete:r3"]);
   });
 
   it("does not report inserting a new rule as a reorder of others", () => {

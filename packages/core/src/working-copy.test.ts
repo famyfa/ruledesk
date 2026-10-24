@@ -57,8 +57,8 @@ describe("working copy edits", () => {
 
   it("adds a new rule after an anchor with a local id", () => {
     const { wc, id } = addRule(base(), { afterId: "r1" });
-    expect(id).toBe("new:1");
-    expect(wc.current.rules.map((r) => r.id).slice(0, 3)).toEqual(["r1", "new:1", "r2"]);
+    expect(id).toMatch(/^new:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(wc.current.rules.map((r) => r.id).slice(0, 3)).toEqual(["r1", id, "r2"]);
     expect(wc.current.rules[1]?.prioGroup).toBe("400000");
   });
 

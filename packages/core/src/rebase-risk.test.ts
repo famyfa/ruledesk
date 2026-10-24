@@ -32,6 +32,15 @@ describe("rebase", () => {
     expect(r.notes.join(" ")).toMatch(/New alias WEB was not kept/);
   });
 
+  it("turns a create that already landed (earlier partial apply) into an update, not a duplicate", () => {
+    const added = addRule(createWorkingCopy(base), { afterId: "b", patch: { description: "NEW", log: true } });
+    const uuid = added.id.slice(4);
+    const fresh = snapshot([rule("a"), rule("b"), rule(uuid, { description: "NEW" }), rule("c")], [alias("x", "NETS")]);
+    const r = rebase(added.wc, fresh);
+    expect(r.wc.current.rules.map((x) => x.id)).toEqual(["a", "b", uuid, "c"]);
+    expect(r.wc.current.rules[2]!.log).toBe(true);
+  });
+
   it("keeps local deletes and reports moves", () => {
     let wc = deleteRules(createWorkingCopy(base), ["a"]);
     wc = moveRule(wc, "c", "b");

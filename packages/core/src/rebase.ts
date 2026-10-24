@@ -1,5 +1,6 @@
 import type { Alias, FirewallRule, FirewallSnapshot } from "./domain.ts";
 import { isLocalId } from "./domain.ts";
+import { uuidOfLocalId } from "./shared.ts";
 import type { AliasPatch, RulePatch, WorkingCopy } from "./working-copy.ts";
 import { ruleLabel } from "./working-copy.ts";
 
@@ -58,7 +59,15 @@ export function rebase(wc: WorkingCopy, fresh: FirewallSnapshot): RebaseResult {
     } else aliases.push(fa);
   }
   for (const a of wc.current.aliases) {
-    if (isLocalId(a.id)) {
+    const landed = uuidOfLocalId(a.id);
+    const freshCopy = landed ? fresh.aliases.find((f) => f.id === landed) : undefined;
+    if (freshCopy) {
+      // Created by an earlier (partly failed) apply: it exists now, so it becomes an update.
+      const idx = aliases.findIndex((x) => x.id === landed);
+      const merged = { ...a, id: landed!, extra: { ...freshCopy.extra, ...a.extra } };
+      if (idx >= 0) aliases[idx] = merged;
+      else aliases.push(merged);
+    } else if (isLocalId(a.id)) {
       if (freshAliasNames.has(a.name)) notes.push(`New alias ${a.name} was not kept: an alias with that name now exists on the firewall.`);
       else aliases.push(a);
     } else if (!fresh.aliases.some((f) => f.id === a.id) && oldBaseAliases.has(a.id)) {
@@ -90,6 +99,13 @@ export function rebase(wc: WorkingCopy, fresh: FirewallSnapshot): RebaseResult {
   for (let i = 0; i < order.length; i++) {
     const r = order[i]!;
     if (!isLocalId(r.id)) continue;
+    const landed = uuidOfLocalId(r.id);
+    const at = landed ? rules.findIndex((x) => x.id === landed) : -1;
+    if (at >= 0) {
+      // Created by an earlier (partly failed) apply: update it in place instead of creating it again.
+      rules[at] = { ...r, id: landed!, extra: { ...rules[at]!.extra, ...r.extra }, prioGroup: rules[at]!.prioGroup, sequence: rules[at]!.sequence };
+      continue;
+    }
     let anchorIdx = -1;
     for (let k = i - 1; k >= 0; k--) {
       const idx = rules.findIndex((x) => x.id === order[k]!.id);

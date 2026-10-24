@@ -7,3 +7,4 @@ export * from "./rule-validation.ts";
 export * from "./ordering.ts";
 export * from "./rebase.ts";
 export * from "./risk.ts";
+export * from "./shared.ts";
