@@ -46,6 +46,17 @@ Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev**. This start
 
 Writes stay disabled until you set `RULEDECK_ALLOW_WRITES=true`. **Test against a disposable OPNsense VM first, never a production firewall.**
 
+## Running with Docker Compose
+
+```sh
+cp .env.example apps/server/.env      # fill it in (see above)
+docker compose up -d --build
+```
+
+Open http://127.0.0.1:3000. The container serves the UI and API on one port, bound to localhost only, with a read-only filesystem and all capabilities dropped. Data (audit log) lives in the `ruledeck-data` volume. Keep the password hash in single quotes in the env file (`npm run hash-password` prints it that way) so the `$` signs aren't interpolated.
+
+Browsers only send the session cookie over HTTPS or `http://localhost`. To use RuleDeck from another machine, put a TLS reverse proxy in front of it. Don't expose it to the internet.
+
 ## Tests
 
 ```sh

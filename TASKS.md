@@ -71,11 +71,11 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 
 ## 6. Phase 5 — Quality & packaging
 - [x] E2E test: the full "add rule → inline alias → review → apply → reload" flow
-- [ ] Docker Compose deployment (no cloud deps, not exposed publicly by default)
+- [ ] Docker Compose deployment (no cloud deps, not exposed publicly by default): Dockerfile + compose written and production mode tested without Docker; **image build not yet tested** (Docker engine wasn't running)
 - [ ] Backup/restore of RuleDeck settings
 - [ ] Encrypted credential storage with documented key strategy
 - [x] Rate limiting on sensitive routes
 - [ ] Version compatibility checks against real OPNsense instances
 - [ ] Security review
 - [ ] Usability polish
-- [ ] Docs: development.md, README updated
+- [x] Docs: development.md, README updated

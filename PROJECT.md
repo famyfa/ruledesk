@@ -46,4 +46,4 @@ Key findings that shaped the design:
 
 ## Phase 5: Quality and packaging
 
-Not started: Docker Compose, settings backup, live OPNsense compatibility runs, security review.
+Started: Dockerfile and `docker-compose.yml` (localhost-only, read-only rootfs, no capabilities). Production mode (server serving the built UI) is tested, but the image build itself isn't yet. Not started: settings backup, encrypted credential storage, live OPNsense compatibility runs, security review.

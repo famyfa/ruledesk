@@ -13,4 +13,5 @@ if (!password || password.length < 10) {
   console.error("Use at least 10 characters.");
   process.exit(1);
 }
-console.log(`RULEDECK_ADMIN_PASSWORD_HASH=${await hashPassword(password)}`);
+// Single quotes keep the $ signs literal in .env files and Docker Compose env_files.
+console.log(`RULEDECK_ADMIN_PASSWORD_HASH='${await hashPassword(password)}'`);

@@ -1,0 +1,31 @@
+# RuleDeck with Docker Compose.
+#   1. cp .env.example apps/server/.env   and fill it in
+#   2. docker compose up -d --build
+#   3. open http://127.0.0.1:3000
+# The port is bound to localhost only. To reach it from other machines, put a
+# TLS reverse proxy in front; don't expose it to the internet.
+services:
+  ruledeck:
+    build: .
+    image: ruledeck:local
+    restart: unless-stopped
+    env_file: apps/server/.env
+    environment:
+      RULEDECK_HOST: 0.0.0.0
+      RULEDECK_DATA_DIR: /data
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ruledeck-data:/data
+      # Optional: CA certificate for a firewall with a private CA.
+      # - ./certs/opnsense-ca.pem:/certs/opnsense-ca.pem:ro   (then OPNSENSE_CA_FILE=/certs/opnsense-ca.pem)
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  ruledeck-data:
