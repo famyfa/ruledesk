@@ -1,0 +1,29 @@
+{
+  "name": "ruledeck",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Spreadsheet-first management UI for OPNsense firewall policy",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -n mock,server,web -c gray,blue,green \"npm run dev -w @ruledeck/mock-opnsense\" \"npm run dev -w @ruledeck/server\" \"npm run dev -w @ruledeck/web\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build -w @ruledeck/web",
+    "hash-password": "tsx apps/server/src/cli/hash-password.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "concurrently": "^10.0.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

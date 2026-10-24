@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+!.env.development
+data/
+*.sqlite
+*.sqlite-journal
+test-results/
+playwright-report/
+.vite/
+.claude/settings.local.json

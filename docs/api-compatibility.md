@@ -1,0 +1,82 @@
+# OPNsense API compatibility matrix
+
+**Target release:** OPNsense **26.7.x** (current stable as of 2026-10; verified against tag `26.7.7`).
+**Second release:** **26.1.x** (verified against tag `26.1.11`).
+
+"Verified (source)" means checked against the OPNsense core source code at that tag. Nothing here has been verified against a running instance yet. That column will be filled in once integration tests run against a disposable test VM.
+
+Base URL: `https://<host>/api/<module>/<controller>/<command>[/<param>...]`. Auth: HTTP Basic with API key as username and secret as password. Bodies are JSON. GET reads, POST writes.
+
+## Version detection
+
+| Endpoint | Response used | 26.7 | 26.1 | Live |
+|---|---|---|---|---|
+| `GET /api/core/firmware/info` | `product_id`, `product_version` (from `opnsense-version -nv`) | source | source | ☐ |
+
+The server reads this at connect time and turns on feature flags (below). Unknown versions run in read-only mode until the user explicitly allows writes.
+
+## Firewall rules (`firewall/filter`, model `Filter.xml`)
+
+| Operation | Endpoint | Method | 26.7 | 26.1 | Live | Notes |
+|---|---|---|---|---|---|---|
+| List rules | `filter/search_rule` | GET/POST | source | source | ☐ | Query: `interface` (comma list; absent = all), `category`, `show_all`. Body: `current`, `rowCount`, `searchPhrase`, `sort`. Sorted by `sort_order`. **Also returns non-MVC (legacy + automatic) rules**, which carry a `legacy` flag |
+| Get rule | `filter/get_rule/{uuid}` | GET | source | source | ☐ | Option fields come back as `{key: {value, selected}}` maps. No uuid returns defaults for a new rule |
+| Add rule | `filter/add_rule` | POST | source | source | ☐ | Body `{"rule": {...}}` → `{"result":"saved","uuid":...}` or `{"result":"failed","validations":{"rule.<field>": msg}}` |
+| Update rule | `filter/set_rule/{uuid}` | POST | source | source | ☐ | Body `{"rule": {...}}`. Only fields sent are changed. Full-model validation. No upsert of unknown uuid |
+| Delete rule | `filter/del_rule/{uuid}` | POST | source | source | ☐ | `{"result":"deleted"}` or `"not found"` |
+| Toggle enabled | `filter/toggle_rule/{uuid}/{0|1}` | POST | source | source | ☐ | |
+| Toggle log | `filter/toggle_rule_log/{uuid}/{0|1}` | POST | source | source | ☐ | Doc page lists GET but the code requires POST |
+| Move | `filter/move_rule_before/{selected}/{target}` | POST | source | source | ☐ | Fails unless both rules share `prio_group`. Rewrites `sequence` of moved (and possibly neighbouring) rules |
+| Interfaces | `filter/get_interface_list` | GET | source | source | ☐ | Sections `floating`, `groups`, `interfaces`, `any` |
+| Network options | `filter/list_network_select_options` | GET | source | source | ☐ | `any`, `(self)`, `<if>`, `<if>ip`, non-port aliases |
+| Port options | `filter/list_port_select_options` | GET | source | **26.1+** | ☐ | Well-known ports + port aliases. Not in 25.7 |
+| Activate | `filter/apply` | POST | source | source | ☐ | Runs `filter reload skip_alias`. Returns `{"status": "<configd output>"}` |
+| Savepoint | `filter/savepoint` | POST | **removed** | source | ☐ | Returns `revision` |
+| Apply with rollback timer | `filter/apply/{revision}` | POST | **removed** | source | ☐ | Auto-reverts after a timeout unless cancelled |
+| Cancel rollback | `filter/cancel_rollback/{revision}` | POST | **removed** | source | ☐ | |
+| Revert | `filter/revert/{revision}` | POST | **removed** | source | ☐ | |
+
+## Aliases (`firewall/alias`, model `Alias.xml` v1.0.1 in 25.7–26.7)
+
+| Operation | Endpoint | Method | 26.7 | 26.1 | Live | Notes |
+|---|---|---|---|---|---|---|
+| List | `alias/search_item` | GET/POST | source | source | ☐ | Query `type`, `category`. Sorted by name |
+| Get | `alias/get_item/{uuid}` | GET | source | source | ☐ | `content` returned as option map that also includes all other alias names (unselected) |
+| Add | `alias/add_item` | POST | source | source | ☐ | Body `{"alias": {...}}`. `content` is newline-separated |
+| Update | `alias/set_item/{uuid}` | POST | source | source | ☐ | **Renaming refactors references in rules automatically** |
+| Delete | `alias/del_item/{uuid}` | POST | source | source | ☐ | Throws "Alias in use" if referenced (`whereUsed`) |
+| Toggle | `alias/toggle_item/{uuid}/{0|1}` | POST | source | source | ☐ | |
+| Name → uuid | `alias/get_alias_u_u_i_d/{name}` | GET | source | source | ☐ | |
+| Activate | `alias/reconfigure` | POST | source | source | ☐ | Reloads filter, alias template and tables |
+| References | `alias_util/find_references` | POST | source | source | ☐ | Returns aliases containing an IP (runtime tables). Not rule references |
+| Runtime table | `alias_util/list/{alias}` | GET | source | source | ☐ | **Runtime** pf table contents. Never treated as persistent config |
+
+Alias types (from model): `host`, `network`, `port`, `url`, `urltable`, `urljson`, `geoip`, `networkgroup`, `mac`, `asn`, `dynipv6host`, `authgroup`, `internal`, `external`. RuleDeck should still read the option list from `get_item` (no uuid) at runtime rather than rely on this table.
+
+## Config history (recovery)
+
+| Operation | Endpoint | Method | 26.7 | 26.1 | Live |
+|---|---|---|---|---|---|
+| List backups | `core/backup/backups/{host}` | GET | source | source | ☐ |
+| Diff | `core/backup/diff/{host}/{b1}/{b2}` | GET | source | source | ☐ |
+| Revert | `core/backup/revert_backup/{backup}` | POST | source | source | ☐ |
+| Download | `core/backup/download/{host}/{backup}` | GET | source | source | ☐ |
+
+Every MVC save creates a new config history entry. That is the recovery mechanism RuleDeck documents for 26.7, which has no savepoint API.
+
+## Feature flags by version
+
+| Flag | 25.7 | 26.1 | 26.7 |
+|---|---|---|---|
+| `rules.read` | yes | yes | yes |
+| `rules.write` | untested | yes | yes |
+| `rules.portSelectOptions` | no | yes | yes |
+| `rules.receivedOn` field | no | no | yes |
+| `apply.rollbackTimer` | yes | yes | **no** |
+| `aliases.write` | untested | yes | yes |
+
+## Known limitations
+
+- Legacy rules (Firewall ▸ Rules [legacy]) and automatic rules are read-only in RuleDeck.
+- NAT (`d_nat`, `source_nat`, `one_to_one`, `npt`) is out of scope for the MVP.
+- No ETag or config revision exists per object. Conflict detection compares fingerprints of re-read objects (see `field-mapping.md`).

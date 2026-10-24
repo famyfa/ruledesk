@@ -1,0 +1,18 @@
+{
+  "name": "@ruledeck/mock-opnsense",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ruledeck/core": "*",
+    "fastify": "^5.12.7"
+  }
+}
