@@ -21,7 +21,16 @@ export const VERIFIED_SERIES = ["26.1", "26.7"] as const;
  * Feature flags for a firewall version. Unknown versions are read-only until
  * someone verifies them, and the reason is stated.
  */
-export function featuresFor(version: string): FeatureFlags {
+export function featuresFor(version: string | null): FeatureFlags {
+  if (version === null) {
+    return {
+      rulesRead: true,
+      rulesWrite: false,
+      aliasesWrite: false,
+      portSelectOptions: false,
+      notes: ["Can't read the OPNsense version: your OPNsense user needs the \"System: Firmware\" privilege. Editing stays disabled until the version is known."],
+    };
+  }
   const v = parseVersion(version);
   const notes: string[] = [];
   if (!v) {
@@ -30,7 +39,6 @@ export function featuresFor(version: string): FeatureFlags {
       rulesWrite: false,
       aliasesWrite: false,
       portSelectOptions: false,
-      rollbackTimer: false,
       notes: [`Unrecognized OPNsense version "${version}". Editing is disabled.`],
     };
   }
@@ -43,16 +51,11 @@ export function featuresFor(version: string): FeatureFlags {
   } else if (!verified) {
     notes.push(`OPNsense ${series} has not been verified with RuleDeck. Editing is disabled until it is.`);
   }
-  const rollbackTimer = atLeast(24, 7) && !atLeast(26, 7);
-  if (atLeast(26, 7)) {
-    notes.push("This version has no automatic rollback timer. Use config history (System ▸ Configuration ▸ History) to recover.");
-  }
   return {
     rulesRead: true,
     rulesWrite: verified,
     aliasesWrite: verified,
     portSelectOptions: atLeast(26, 1),
-    rollbackTimer,
     notes,
   };
 }

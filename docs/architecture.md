@@ -8,7 +8,7 @@ RuleDeck is a small self-hosted web app: a React UI, a Node backend that alone h
  │ Rule grid          │  session +  │ auth / session / CSRF     │  Basic   │ /api/firewall│
  │ Working copy (core)│ ──────────► │ /api/* (normalized JSON)  │ ───────► │ /api/core    │
  │ Diff / review      │  CSRF hdr   │ OPNsense adapter          │  key:sec └──────────────┘
- └────────────────────┘             │ SQLite (audit, settings)  │
+ └────────────────────┘             │ in-memory sessions only   │
                                     └───────────────────────────┘
 ```
 
@@ -20,7 +20,7 @@ The spec suggested six packages. To avoid empty packages, domain types and valid
 |---|---|---|
 | `packages/core` | Domain types, validators (IP/CIDR/port/alias name), working copy with undo/redo, diff generation, reference tracking | browser + server |
 | `packages/opnsense-client` | Typed HTTP client, raw response schemas (zod), adapter raw ⇄ domain, version detection | server only |
-| `apps/server` | Fastify backend: auth, sessions, CSRF, firewall registry, normalized read API, (later) apply pipeline, audit log | server |
+| `apps/server` | Fastify backend: sign-in with OPNsense accounts, in-memory sessions, CSRF, topology file, normalized read API, apply pipeline. Stores nothing | server |
 | `apps/mock-opnsense` | Mock OPNsense API with fault injection for development and tests | dev/test |
 | `apps/web` | React + Vite UI | browser |
 | `tests/e2e` | Playwright acceptance tests (Phase 5) | dev/test |
@@ -29,7 +29,7 @@ Packages export their TypeScript source directly (no build step during developme
 
 ## Key decisions
 
-**Working copy lives in the browser** (`packages/core` `WorkingCopy`), persisted to `localStorage` so a reload does not lose staged edits. It holds the baseline snapshot (what was read from OPNsense) plus a list of local operations. Undo/redo replays operations. Nothing reaches the firewall until the user applies.
+**Working copy lives in the browser** (`packages/core` `WorkingCopy`), persisted to `sessionStorage` (this tab only, cleared at sign-out) so a reload does not lose staged edits. It holds the baseline snapshot (what was read from OPNsense) plus a list of local operations. Undo/redo replays operations. Nothing reaches the firewall until the user applies.
 
 **The server never trusts the browser's view of the firewall.** On apply (Phase 4) the browser sends its change set and baseline fingerprints; the server re-reads OPNsense, detects conflicts, writes only the changed fields, applies, then reads back and verifies.
 
@@ -58,8 +58,8 @@ The grid lives in `apps/web/src/grid`: `RuleGrid.tsx` (navigation, selection, cl
 
 ## Persistence
 
-SQLite via Node's built-in `node:sqlite` (no native build step). It stores audit events and application settings only. Firewall credentials come from environment variables. Encrypted storage of credentials added through the UI is planned for Phase 5 (see `security.md`).
+None on the server, by design. No database, no stored credentials, no local users. Users sign in with their OPNsense accounts; the server keeps only the per-site firewall sessions in memory (see `security.md`). The audit trail is each firewall's config history, which records the OPNsense user. The only configuration file is the operator's read-only topology (sites and firewall URLs, no secrets).
 
 ## Deployment
 
-Docker Compose with one container (the server also serves the built web app). Bound to `127.0.0.1` by default. No external services.
+Docker Compose with one container (the server also serves the built web app), no volume, read-only filesystem. Bound to `127.0.0.1` by default. No external services.

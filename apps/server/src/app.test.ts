@@ -1,163 +1,242 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildMockServer, type MockServer } from "../../mock-opnsense/src/server.ts";
 import { buildApp, CSRF_HEADER, SESSION_COOKIE } from "./app.ts";
-import { hashPassword, SessionStore, RateLimiter, IDLE_TIMEOUT_MS } from "./auth.ts";
-import { AuditLog } from "./audit.ts";
-import { loadConfig, ConfigError, type AppConfig } from "./config.ts";
+import { IDLE_TIMEOUT_MS, RateLimiter, SessionStore } from "./auth.ts";
+import { ConfigError, loadConfig, type AppConfig } from "./config.ts";
+import { parseTopology, publicTopology } from "./topology.ts";
 
-const SECRET = "super-secret-value-123";
-let mock: MockServer;
+/** Two sites, each a mock firewall. */
+let ber: MockServer;
+let muc: MockServer;
 let app: FastifyInstance;
-let audit: AuditLog;
+const urlOf = (m: MockServer) => `http://127.0.0.1:${(m.app.server.address() as { port: number }).port}`;
 
 beforeAll(async () => {
-  mock = buildMockServer({ apiKey: "k1", apiSecret: SECRET });
-  await mock.app.listen({ port: 0, host: "127.0.0.1" });
-  const addr = mock.app.server.address();
-  if (!addr || typeof addr === "string") throw new Error("no address");
-  const config: AppConfig = {
-    production: false,
-    host: "127.0.0.1",
-    port: 0,
-    dataDir: ":memory:",
-    adminUser: "admin",
-    adminPasswordHash: await hashPassword("correct horse battery"),
-    cookieSecure: false,
-    allowWrites: true,
-    firewalls: [{ id: "default", name: "Mock", baseUrl: `http://127.0.0.1:${addr.port}`, apiKey: "k1", apiSecret: SECRET, timeoutMs: 5000 }],
-  };
-  audit = new AuditLog(":memory:");
-  app = await buildApp({ config, audit, logger: false });
+  ber = buildMockServer();
+  muc = buildMockServer({ users: { alice: { password: "alice-pass-1", privileges: ["*"] } } });
+  await ber.app.listen({ port: 0, host: "127.0.0.1" });
+  await muc.app.listen({ port: 0, host: "127.0.0.1" });
+  const topology = parseTopology(
+    JSON.stringify({
+      version: 1,
+      sites: [
+        { id: "ber", name: "Berlin", primary: { url: urlOf(ber) } },
+        { id: "muc", name: "Munich", primary: { url: urlOf(muc) } },
+      ],
+    }),
+  );
+  const config: AppConfig = { production: false, host: "127.0.0.1", port: 0, cookieSecure: false, allowWrites: true, applyRateLimit: 100, siteLoginFailures: 100, topology };
+  app = await buildApp({ config, logger: false });
 });
 
 afterAll(async () => {
   await app.close();
-  await mock.app.close();
+  await ber.app.close();
+  await muc.app.close();
 });
 
-async function login(password = "correct horse battery", ip = "10.0.0.1") {
-  const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "admin", password }, remoteAddress: ip });
-  const cookie = res.cookies.find((c) => c.name === SESSION_COOKIE);
-  return { res, cookie: cookie ? `${SESSION_COOKIE}=${cookie.value}` : "", csrf: res.json().csrfToken as string };
+beforeEach(async () => {
+  for (const m of [ber, muc]) await fetch(`${urlOf(m)}/__mock/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+});
+
+const pw = (username: string, password: string) => ({ method: "password" as const, username, password });
+
+/** Cookie + CSRF token from a response that (re)issued the session. */
+function sessionOf(res: { cookies: { name: string; value: string }[]; json: () => { csrfToken: string } }) {
+  return { cookie: `${SESSION_COOKIE}=${res.cookies.find((c) => c.name === SESSION_COOKIE)!.value}`, csrf: res.json().csrfToken };
 }
 
-describe("authentication", () => {
-  it("rejects API calls without a session", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/firewalls" });
-    expect(res.statusCode).toBe(401);
+async function login(sites: Record<string, unknown>, ip = "10.0.0.1") {
+  const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { sites }, remoteAddress: ip });
+  const c = res.cookies.find((x) => x.name === SESSION_COOKIE);
+  const body = res.json();
+  return { res, body, cookie: c ? `${SESSION_COOKIE}=${c.value}` : "", csrf: body.csrfToken as string };
+}
+
+describe("topology", () => {
+  it("is public but reveals no URLs", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/topology" });
+    expect(res.json().sites.map((s: { id: string }) => s.id)).toEqual(["ber", "muc"]);
+    expect(res.body).not.toContain("127.0.0.1");
   });
 
-  it("logs in and sets a hardened cookie", async () => {
-    const { res } = await login();
+  it("validates the file", () => {
+    const site = (id: string, url: string, extra = {}) => ({ id, name: id, primary: { url }, ...extra });
+    const t = (sites: unknown[]) => () => parseTopology(JSON.stringify({ version: 1, sites }));
+    expect(t([site("a", "https://a"), site("a", "https://b")])).toThrow(/Duplicate site/);
+    expect(t([site("a", "http://fw.lan")])).toThrow(/https/);
+    expect(t([site("a", "https://a"), site("b", "https://a")])).toThrow(/used twice/);
+    expect(t([site("a", "https://a", { interfaces: { LAN: { key: "lan", label: "LAN" } } }), site("b", "https://b")])).toThrow(/every site/);
+    expect(t([site("a", "https://a", { interfaces: { LAN: { key: "lan", label: "LAN" }, DMZ: { key: "lan", label: "DMZ" } } })])).toThrow(/same key/);
+    expect(t([{ ...site("a", "https://a"), password: "x" }])).toThrow(/Invalid topology/);
+    const pub = publicTopology(parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { secondary: { url: "https://a2" } })] })));
+    expect(pub.sites[0]).toEqual({ id: "a", name: "a", hasSecondary: true });
+  });
+
+  it("refuses old settings that would store secrets", () => {
+    const load = () => parseTopology(JSON.stringify({ version: 1, sites: [{ id: "a", name: "A", primary: { url: "https://a" } }] }));
+    expect(() => loadConfig({ OPNSENSE_API_SECRET: "x" }, load)).toThrow(ConfigError);
+    expect(() => loadConfig({ RULEDECK_ADMIN_PASSWORD_HASH: "x" }, load)).toThrow(/no longer used/);
+    const cfg = loadConfig({ NODE_ENV: "production" }, load);
+    expect(cfg.cookieSecure).toBe(true);
+    expect(cfg.allowWrites).toBe(false);
+  });
+});
+
+describe("signing in with OPNsense accounts", () => {
+  it("rejects API calls without a session", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/sites/ber/snapshot" })).statusCode).toBe(401);
+  });
+
+  it("signs in to each site with that site's own account, and reports per-site failures", async () => {
+    const { res, body } = await login({ ber: pw("admin", "ruledeck-dev"), muc: pw("alice", "wrong-password") });
     expect(res.statusCode).toBe(200);
+    const sites = Object.fromEntries(body.sites.map((s: { id: string }) => [s.id, s]));
+    expect(sites.ber).toMatchObject({ signedIn: true, user: "admin", method: "password" });
+    expect(sites.ber.info.productVersion).toBe("26.7.7");
+    expect(sites.muc).toMatchObject({ signedIn: false });
+    expect(body.siteErrors.muc.kind).toBe("invalid_credentials");
     const c = res.cookies.find((x) => x.name === SESSION_COOKIE)!;
     expect(c.httpOnly).toBe(true);
     expect(c.sameSite).toBe("Strict");
-    expect(res.json().csrfToken).toMatch(/^[A-Za-z0-9_-]{40,}$/);
   });
 
-  it("rejects wrong passwords and records the failure", async () => {
-    const { res } = await login("wrong password", "10.0.0.2");
+  it("fails when no site accepts the credentials", async () => {
+    const { res } = await login({ ber: pw("admin", "nope-nope-1") }, "10.0.0.2");
     expect(res.statusCode).toBe(401);
-    expect(audit.list().some((e) => e.action === "auth.login" && e.outcome === "failure")).toBe(true);
   });
 
-  it("rate-limits login attempts per IP", async () => {
-    const codes: number[] = [];
-    for (let i = 0; i < 7; i++) codes.push((await login("nope nope nope", "10.9.9.9")).res.statusCode);
-    expect(codes.slice(0, 5).every((c) => c === 401)).toBe(true);
-    expect(codes.slice(5)).toEqual([429, 429]);
+  it("supports an API key instead of a password", async () => {
+    const { body } = await login({ ber: { method: "apikey", apiKey: "mock-key", apiSecret: "mock-secret" } });
+    expect(body.sites[0]).toMatchObject({ signedIn: true, user: "API key …-key", method: "apikey" });
   });
 
-  it("does not count successful logins towards the limit", async () => {
-    for (let i = 0; i < 8; i++) expect((await login(undefined, "10.8.8.8")).res.statusCode).toBe(200);
+  it("never returns passwords, secrets or firewall cookies", async () => {
+    const { res, cookie } = await login({ ber: pw("admin", "ruledeck-dev"), muc: { method: "apikey", apiKey: "mock-key", apiSecret: "mock-secret" } });
+    const session = await app.inject({ method: "GET", url: "/api/auth/session", headers: { cookie } });
+    for (const text of [res.body, session.body]) {
+      expect(text).not.toContain("ruledeck-dev");
+      expect(text).not.toContain("mock-secret");
+      expect(text).not.toContain("PHPSESSID");
+    }
+  });
+
+  it("rate-limits failed sign-ins per IP and site", async () => {
+    const codes: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const { body } = await login({ ber: pw("admin", "bad-bad-bad") }, "10.9.9.9");
+      codes.push(body.siteErrors.ber.kind);
+    }
+    expect(codes.slice(0, 5).every((k) => k === "invalid_credentials")).toBe(true);
+    expect(codes.slice(5)).toEqual(["rate_limited", "rate_limited"]);
   });
 
   it("requires the CSRF token on state-changing requests", async () => {
-    const { cookie, csrf } = await login(undefined, "10.0.0.3");
-    const without = await app.inject({ method: "POST", url: "/api/firewalls/default/connect", headers: { cookie } });
-    expect(without.statusCode).toBe(403);
-    const wrong = await app.inject({ method: "POST", url: "/api/firewalls/default/connect", headers: { cookie, [CSRF_HEADER]: "x".repeat(43) } });
-    expect(wrong.statusCode).toBe(403);
-    const ok = await app.inject({ method: "POST", url: "/api/firewalls/default/connect", headers: { cookie, [CSRF_HEADER]: csrf } });
-    expect(ok.statusCode).toBe(200);
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    expect((await app.inject({ method: "POST", url: "/api/sites/ber/connect", headers: { cookie } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/api/sites/ber/connect", headers: { cookie, [CSRF_HEADER]: csrf } })).statusCode).toBe(200);
   });
 
-  it("ends the session on logout", async () => {
-    const { cookie, csrf } = await login(undefined, "10.0.0.4");
+  it("adds a second site later, and signs out of a single site", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const add = await app.inject({ method: "POST", url: "/api/auth/sites/muc", headers: { cookie, [CSRF_HEADER]: csrf }, payload: pw("alice", "alice-pass-1") });
+    expect(add.json().sites.find((s: { id: string }) => s.id === "muc").signedIn).toBe(true);
+    expect(muc.auth.signedInSessions()).toBe(1);
+    const next = sessionOf(add);
+    const out = await app.inject({ method: "POST", url: "/api/auth/sites/muc/logout", headers: { cookie: next.cookie, [CSRF_HEADER]: next.csrf } });
+    expect(out.json().sites.find((s: { id: string }) => s.id === "muc").signedIn).toBe(false);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(muc.auth.signedInSessions()).toBe(0); // logged out of the firewall too
+  });
+
+  it("logs out of the firewalls when RuleDeck's session ends", async () => {
+    const before = ber.auth.signedInSessions();
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    expect(ber.auth.signedInSessions()).toBe(before + 1);
     await app.inject({ method: "POST", url: "/api/auth/logout", headers: { cookie, [CSRF_HEADER]: csrf } });
-    const res = await app.inject({ method: "GET", url: "/api/firewalls", headers: { cookie } });
-    expect(res.statusCode).toBe(401);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ber.auth.signedInSessions()).toBe(before);
+    expect((await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } })).statusCode).toBe(401);
   });
 });
 
-describe("firewall endpoints", () => {
-  it("connects, detects version and features", async () => {
-    const { cookie, csrf } = await login(undefined, "10.0.1.1");
-    const res = await app.inject({ method: "POST", url: "/api/firewalls/default/connect", headers: { cookie, [CSRF_HEADER]: csrf } });
-    const state = res.json().state;
-    expect(state.status).toBe("connected");
-    expect(state.info.productVersion).toBe("26.7.7");
-    expect(state.info.features.rulesWrite).toBe(true);
-    expect(state.info.features.rollbackTimer).toBe(false);
-  });
-
-  it("returns a normalized snapshot", async () => {
-    const { cookie } = await login(undefined, "10.0.1.2");
-    const res = await app.inject({ method: "GET", url: "/api/firewalls/default/snapshot", headers: { cookie } });
+describe("working with a site", () => {
+  it("reads a snapshot through the user's firewall session", async () => {
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const res = await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } });
     expect(res.statusCode).toBe(200);
-    const snap = res.json().snapshot;
-    expect(snap.rules).toHaveLength(8);
-    expect(snap.aliases).toHaveLength(3);
+    expect(res.json().snapshot.rules).toHaveLength(8);
   });
 
-  it("returns 404 for unknown firewalls", async () => {
-    const { cookie } = await login(undefined, "10.0.1.3");
-    const res = await app.inject({ method: "GET", url: "/api/firewalls/nope/snapshot", headers: { cookie } });
-    expect(res.statusCode).toBe(404);
+  it("says which site needs a new sign-in when the firewall session ends", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    await fetch(`${urlOf(ber)}/__mock/expire-sessions`, { method: "POST" });
+    const res = await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toMatchObject({ kind: "site_signed_out", siteId: "ber" });
+    // RuleDeck's own session is still alive; re-auth just that site.
+    const again = await app.inject({ method: "POST", url: "/api/auth/sites/ber", headers: { cookie, [CSRF_HEADER]: csrf }, payload: pw("admin", "ruledeck-dev") });
+    expect(again.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie: sessionOf(again).cookie } })).statusCode).toBe(200);
   });
 
-  it("maps firewall errors to 502 with a safe message", async () => {
-    const { cookie } = await login(undefined, "10.0.1.4");
-    const addr = mock.app.server.address() as { port: number };
-    await fetch(`http://127.0.0.1:${addr.port}/__mock/faults`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ match: "firewall/filter/search_rule", type: "http500" }]) });
-    const res = await app.inject({ method: "GET", url: "/api/firewalls/default/snapshot", headers: { cookie } });
-    expect(res.statusCode).toBe(502);
-    expect(res.json().error.kind).toBe("server");
+  it("applies as the signed-in OPNsense user (shows up in its config history)", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const snap = (await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } })).json().snapshot;
+    const rules = snap.rules.map((r: { description: string; log: boolean }) => (r.description === "Block DMZ to LAN" ? { ...r, log: true } : r));
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sites/ber/apply",
+      headers: { cookie, [CSRF_HEADER]: csrf },
+      payload: { baseline: snap, current: { rules, aliases: snap.aliases, nextLocalId: 1 }, confirm: true },
+    });
+    expect(res.json().result.outcome).toBe("success");
+    expect(ber.history().length).toBeGreaterThan(0);
+    expect(ber.history().every((h) => h.user === "admin")).toBe(true);
   });
 
-  it("never sends the API secret or key to the browser", async () => {
-    const { cookie, csrf } = await login(undefined, "10.0.1.5");
-    const bodies = await Promise.all([
-      app.inject({ method: "GET", url: "/api/firewalls", headers: { cookie } }),
-      app.inject({ method: "POST", url: "/api/firewalls/default/connect", headers: { cookie, [CSRF_HEADER]: csrf } }),
-      app.inject({ method: "GET", url: "/api/firewalls/default/snapshot", headers: { cookie } }),
-      app.inject({ method: "GET", url: "/api/audit", headers: { cookie } }),
-    ]);
-    const basic = Buffer.from(`k1:${SECRET}`).toString("base64");
-    for (const b of bodies) {
-      expect(b.body).not.toContain(SECRET);
-      expect(b.body).not.toContain(basic);
-    }
+  it("reports missing privileges instead of signing the user out", async () => {
+    const { cookie, csrf } = await login({ ber: pw("viewer", "viewer-pass") });
+    const snap = (await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } })).json().snapshot;
+    const rules = snap.rules.map((r: { description: string; log: boolean }) => (r.description === "Block DMZ to LAN" ? { ...r, log: true } : r));
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sites/ber/apply",
+      headers: { cookie, [CSRF_HEADER]: csrf },
+      payload: { baseline: snap, current: { rules, aliases: snap.aliases, nextLocalId: 1 }, confirm: true },
+    });
+    const result = res.json().result;
+    expect(result.outcome).toBe("failed");
+    expect(result.steps[0].error).toMatch(/missing privilege/);
+  });
+
+  it("refuses sites you're not signed in to, and unknown sites", async () => {
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") });
+    expect((await app.inject({ method: "GET", url: "/api/sites/muc/snapshot", headers: { cookie } })).json().error.kind).toBe("site_signed_out");
+    expect((await app.inject({ method: "GET", url: "/api/sites/nope/snapshot", headers: { cookie } })).statusCode).toBe(404);
   });
 
   it("sets security headers", async () => {
     const res = await app.inject({ method: "GET", url: "/api/health" });
     expect(res.headers["x-frame-options"]).toBe("DENY");
-    expect(res.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(res.headers["cache-control"]).toBe("no-store");
   });
 });
 
 describe("helpers", () => {
-  it("expires idle sessions", () => {
+  it("expires idle sessions and ends their firewall sessions", () => {
     let t = 0;
-    const store = new SessionStore(() => t);
-    const s = store.create("admin");
+    const ended: string[] = [];
+    const store = new SessionStore(() => t, (s) => ended.push(s.siteId));
+    const s = store.create()!;
+    s.sites.set("ber", { siteId: "ber" } as never);
     t = IDLE_TIMEOUT_MS - 1;
     expect(store.get(s.id)).toBeDefined();
     t += IDLE_TIMEOUT_MS + 1;
     expect(store.get(s.id)).toBeUndefined();
+    expect(ended).toEqual(["ber"]);
+    store.close();
   });
 
   it("resets the rate limit window", () => {
@@ -168,14 +247,90 @@ describe("helpers", () => {
     t = 1000;
     expect(rl.take("a")).toBe(true);
   });
+});
 
-  it("validates configuration", () => {
-    const base = { RULEDECK_ADMIN_PASSWORD_HASH: "scrypt$a$b" };
-    expect(() => loadConfig({})).toThrow(ConfigError);
-    expect(() => loadConfig({ ...base, OPNSENSE_URL: "http://fw.lan", OPNSENSE_API_KEY: "k", OPNSENSE_API_SECRET: "s" })).toThrow(/https/);
-    expect(() => loadConfig({ ...base, OPNSENSE_URL: "https://fw.lan" })).toThrow(/API_KEY/);
-    const cfg = loadConfig({ ...base, NODE_ENV: "production", OPNSENSE_URL: "https://fw.lan", OPNSENSE_API_KEY: "k", OPNSENSE_API_SECRET: "s" });
-    expect(cfg.cookieSecure).toBe(true);
-    expect(cfg.firewalls).toHaveLength(1);
+describe("hardening (review findings)", () => {
+  async function appWith(over: Partial<AppConfig>, sessions?: SessionStore) {
+    const topology = parseTopology(JSON.stringify({ version: 1, sites: [{ id: "ber", name: "Berlin", primary: { url: urlOf(ber) } }] }));
+    return buildApp({ config: { production: false, host: "127.0.0.1", port: 0, cookieSecure: false, allowWrites: true, applyRateLimit: 100, siteLoginFailures: 100, topology, ...over }, sessions, logger: false });
+  }
+
+  it("caps parallel password guesses (slots are reserved before the attempt)", async () => {
+    const a = await appWith({});
+    const attempts = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        a.inject({ method: "POST", url: "/api/auth/login", payload: { sites: { ber: pw("admin", `guess-${i}-xx`) } }, remoteAddress: "10.7.7.7" }),
+      ),
+    );
+    const kinds = attempts.map((r) => r.json().siteErrors.ber.kind);
+    expect(kinds.filter((k) => k === "invalid_credentials").length).toBeLessThanOrEqual(5);
+    expect(kinds.filter((k) => k === "rate_limited").length).toBeGreaterThanOrEqual(7);
+    await a.close();
+  });
+
+  it("limits failed sign-ins per site across all IPs (stays under OPNsense's lockout)", async () => {
+    const a = await appWith({ siteLoginFailures: 2 });
+    const kinds: string[] = [];
+    for (const ip of ["10.1.1.1", "10.1.1.2", "10.1.1.3"]) {
+      const r = await a.inject({ method: "POST", url: "/api/auth/login", payload: { sites: { ber: pw("admin", "wrong-wrong-1") } }, remoteAddress: ip });
+      kinds.push(r.json().siteErrors.ber.kind);
+    }
+    expect(kinds).toEqual(["invalid_credentials", "invalid_credentials", "rate_limited"]);
+    await a.close();
+  });
+
+  it("doesn't let an encoded path skip authentication", async () => {
+    const res = await app.inject({ method: "GET", url: "/%61pi/sites/ber/snapshot" });
+    expect(res.statusCode).toBe(401);
+    const post = await app.inject({ method: "POST", url: "/%61pi/auth/sites/ber", payload: pw("admin", "ruledeck-dev") });
+    expect(post.statusCode).toBe(401);
+  });
+
+  it("refuses new sign-ins when full instead of signing other people out", async () => {
+    const store = new SessionStore(Date.now, () => {}, 1);
+    const a = await appWith({}, store);
+    const first = await a.inject({ method: "POST", url: "/api/auth/login", payload: { sites: { ber: pw("admin", "ruledeck-dev") } } });
+    const second = await a.inject({ method: "POST", url: "/api/auth/login", payload: { sites: { ber: pw("admin", "ruledeck-dev") } } });
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(503);
+    const cookie = `${SESSION_COOKIE}=${first.cookies.find((c) => c.name === SESSION_COOKIE)!.value}`;
+    expect((await a.inject({ method: "GET", url: "/api/auth/session", headers: { cookie } })).statusCode).toBe(200);
+    await a.close();
+  });
+
+  it("issues a new session id when a site is added", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const add = await app.inject({ method: "POST", url: "/api/auth/sites/muc", headers: { cookie, [CSRF_HEADER]: csrf }, payload: pw("alice", "alice-pass-1") });
+    const fresh = add.cookies.find((c) => c.name === SESSION_COOKIE)!;
+    expect(`${SESSION_COOKIE}=${fresh.value}`).not.toBe(cookie);
+    expect(add.json().csrfToken).not.toBe(csrf);
+    expect((await app.inject({ method: "GET", url: "/api/auth/session", headers: { cookie } })).statusCode).toBe(401);
+  });
+
+  it("lets a running apply finish when the user signs out meanwhile", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const snap = (await app.inject({ method: "GET", url: "/api/sites/ber/snapshot", headers: { cookie } })).json().snapshot;
+    const rules = snap.rules.map((r: { description: string; log: boolean }) => (r.description === "Block DMZ to LAN" ? { ...r, log: true } : r));
+    await fetch(`${urlOf(ber)}/__mock/faults`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ match: "firewall/filter/set_rule", type: "slow" }]) });
+    const applying = app.inject({
+      method: "POST",
+      url: "/api/sites/ber/apply",
+      headers: { cookie, [CSRF_HEADER]: csrf },
+      payload: { baseline: snap, current: { rules, aliases: snap.aliases, nextLocalId: 1 }, confirm: true },
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await app.inject({ method: "POST", url: "/api/auth/logout", headers: { cookie, [CSRF_HEADER]: csrf } });
+    const res = await applying;
+    expect(res.json().result.outcome).toBe("success");
+  });
+
+  it("ends a site session that arrives after its RuleDeck session is gone", () => {
+    const ended: string[] = [];
+    const store = new SessionStore(Date.now, (s) => ended.push(s.siteId));
+    const s = store.create()!;
+    store.destroy(s.id);
+    expect(store.attachSite(s, { siteId: "ber" } as never)).toBe(false);
+    expect(ended).toEqual(["ber"]);
+    store.close();
   });
 });

@@ -1,14 +1,32 @@
 import { Agent, fetch } from "undici";
 import { mapResponseError, mapTransportError, OpnsenseError } from "./errors.ts";
 
-export interface ConnectionConfig {
+/**
+ * How RuleDeck authenticates to a firewall. RuleDeck never stores either:
+ * - session: an OPNsense GUI session (cookie + CSRF token) obtained by signing
+ *   in with the user's own username/password (see login.ts). The password
+ *   itself is not kept.
+ * - apikey: an OPNsense API key/secret pair (fallback, e.g. for SSO-only setups).
+ */
+export type Credentials =
+  | { kind: "session"; cookie: string; csrfToken: string }
+  | { kind: "apikey"; apiKey: string; apiSecret: string };
+
+export interface EndpointConfig {
   /** e.g. https://fw.lan or https://10.0.0.1:8443. */
   baseUrl: string;
-  apiKey: string;
-  apiSecret: string;
   /** PEM CA bundle for firewalls with a private/self-signed CA. */
   caPem?: string;
   timeoutMs?: number;
+}
+
+export interface ConnectionConfig extends EndpointConfig {
+  auth: Credentials;
+}
+
+/** TLS-verifying dispatcher. Verification can't be turned off; a custom CA can be added. */
+export function makeDispatcher(caPem?: string): Agent {
+  return new Agent({ connect: caPem ? { ca: caPem, rejectUnauthorized: true } : { rejectUnauthorized: true } });
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
@@ -46,18 +64,23 @@ export function apiPath(endpoint: string, ...params: string[]): string {
 
 export class OpnsenseHttp {
   private readonly base: URL;
-  private readonly auth: string;
+  private readonly authHeaders: Record<string, string>;
+  private readonly csrfHeader: Record<string, string>;
   private readonly dispatcher: Agent;
   private readonly timeoutMs: number;
 
   constructor(cfg: ConnectionConfig) {
     this.base = validateBaseUrl(cfg.baseUrl);
-    this.auth = "Basic " + Buffer.from(`${cfg.apiKey}:${cfg.apiSecret}`).toString("base64");
+    if (cfg.auth.kind === "apikey") {
+      this.authHeaders = { authorization: "Basic " + Buffer.from(`${cfg.auth.apiKey}:${cfg.auth.apiSecret}`).toString("base64") };
+      this.csrfHeader = {};
+    } else {
+      // Same mechanism the OPNsense web UI uses for its own API calls.
+      this.authHeaders = { cookie: cfg.auth.cookie };
+      this.csrfHeader = { "x-csrftoken": cfg.auth.csrfToken };
+    }
     this.timeoutMs = cfg.timeoutMs ?? 15_000;
-    // TLS verification stays on. A custom CA can be added; it can't be turned off.
-    this.dispatcher = new Agent({
-      connect: cfg.caPem ? { ca: cfg.caPem, rejectUnauthorized: true } : { rejectUnauthorized: true },
-    });
+    this.dispatcher = makeDispatcher(cfg.caPem);
   }
 
   get origin(): string {
@@ -78,18 +101,23 @@ export class OpnsenseHttp {
         method,
         dispatcher: this.dispatcher,
         headers: {
-          authorization: this.auth,
+          ...this.authHeaders,
           accept: "application/json",
-          ...(method === "POST" ? { "content-type": "application/json" } : {}),
+          ...(method === "POST" ? { "content-type": "application/json", ...this.csrfHeader } : {}),
         },
         body: method === "POST" ? JSON.stringify(opts.body ?? {}) : undefined,
         signal: AbortSignal.timeout(this.timeoutMs),
-        redirect: "error",
+        // A session that expired gets redirected to the login page; treat that as "signed out".
+        redirect: "manual",
       });
     } catch (err) {
       throw mapTransportError(err, endpoint);
     }
 
+    if (res.status >= 300 && res.status < 400) {
+      await res.body?.cancel().catch(() => {});
+      throw new OpnsenseError("auth", "The firewall session has ended. Sign in again.", { endpoint, status: res.status });
+    }
     let body: unknown = null;
     const text = await res.text().catch(() => "");
     if (text) {

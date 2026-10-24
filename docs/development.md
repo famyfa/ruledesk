@@ -5,7 +5,7 @@
 ```
 apps/
   mock-opnsense/   Fake OPNsense API (Fastify) with fault injection
-  server/          RuleDeck backend (Fastify): auth, sessions, CSRF, firewall registry, audit log
+  server/          RuleDeck backend (Fastify): OPNsense sign-in, in-memory sessions, CSRF, topology, apply
   web/             React UI (Vite)
 packages/
   core/            Domain model, validators, working copy, diff, validation (browser + node)
@@ -25,11 +25,10 @@ Packages export TypeScript source directly, so there is no build step during dev
 | `npx playwright test` | E2E tests. Reuses a running `npm run dev` or starts one |
 | `npm run typecheck` | `tsc` in every workspace |
 | `npm run build` | Production build of the web app (`apps/web/dist`) |
-| `npm run hash-password` | Print a scrypt hash for `RULEDECK_ADMIN_PASSWORD_HASH` |
 
 ## Configuration in development
 
-`apps/server/.env.development` is loaded when no `.env` exists. It points at the mock and sets the dev login `admin / ruledeck-dev`. Put a real config in `apps/server/.env` (git-ignored).
+`apps/server/.env.development` is loaded when no `.env` exists. It uses `apps/server/topology.dev.json` (two mock sites). Sign in as `admin / ruledeck-dev`, or `viewer / viewer-pass` for a read-only account. Put a real config in `apps/server/.env` (git-ignored).
 
 ## Mock control
 
@@ -41,4 +40,4 @@ The mock exposes `/__mock/*` endpoints to reset state, inject faults and simulat
 - The UI works on domain objects from `packages/core`. Only the adapter knows the OPNsense field names.
 - Modified rules are written with only their changed fields. Don't "round-trip" whole records.
 - Every working-copy operation is a pure function with a unit test.
-- No secret ever goes into a response, a log line or an audit event. `apps/server/src/app.test.ts` checks this.
+- No secret ever goes into a response or a log line (`apps/server/src/app.test.ts` checks this). RuleDeck stores nothing on the server.

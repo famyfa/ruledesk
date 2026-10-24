@@ -1,7 +1,9 @@
 # RuleDeck with Docker Compose.
-#   1. cp .env.example apps/server/.env   and fill it in
+#   1. cp .env.example apps/server/.env
+#      cp ruledeck.topology.example.json ruledeck.topology.json   (then edit both)
 #   2. docker compose up -d --build
-#   3. open http://127.0.0.1:3000
+#   3. open http://127.0.0.1:3000 and sign in with your OPNsense account
+# RuleDeck stores nothing: no database, no credentials, no volume.
 # The port is bound to localhost only. To reach it from other machines, put a
 # TLS reverse proxy in front; don't expose it to the internet.
 services:
@@ -12,13 +14,14 @@ services:
     env_file: apps/server/.env
     environment:
       RULEDECK_HOST: 0.0.0.0
-      RULEDECK_DATA_DIR: /data
+      RULEDECK_TOPOLOGY_FILE: /config/ruledeck.topology.json
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
-      - ruledeck-data:/data
-      # Optional: CA certificate for a firewall with a private CA.
-      # - ./certs/opnsense-ca.pem:/certs/opnsense-ca.pem:ro   (then OPNSENSE_CA_FILE=/certs/opnsense-ca.pem)
+      # Which sites/firewalls exist (no secrets). Read-only.
+      - ./ruledeck.topology.json:/config/ruledeck.topology.json:ro
+      # CA certificates referenced by "caFile" in the topology, if any.
+      - ./certs:/certs:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -26,6 +29,3 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-
-volumes:
-  ruledeck-data:

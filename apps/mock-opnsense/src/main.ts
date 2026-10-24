@@ -1,14 +1,17 @@
 import { buildMockServer } from "./server.ts";
 
-const port = Number(process.env.MOCK_PORT ?? 8443);
+/**
+ * Starts the mock firewalls used in development (see apps/server/topology.dev.json).
+ * Each instance accepts the users from DEFAULT_USERS (e.g. admin / ruledeck-dev).
+ */
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
+const instances = [
+  { name: "Berlin", port: Number(process.env.MOCK_PORT ?? 8443) },
+  { name: "Munich", port: Number(process.env.MOCK_PORT_2 ?? 8444) },
+];
 
-const { app } = buildMockServer({
-  version: process.env.MOCK_VERSION,
-  apiKey: process.env.MOCK_API_KEY,
-  apiSecret: process.env.MOCK_API_SECRET,
-  logger: process.env.MOCK_LOG === "1",
-});
-
-await app.listen({ port, host });
-console.log(`Mock OPNsense listening on http://${host}:${port} (key: mock-key / secret: mock-secret)`);
+for (const inst of instances) {
+  const { app } = buildMockServer({ version: process.env.MOCK_VERSION, logger: process.env.MOCK_LOG === "1" });
+  await app.listen({ port: inst.port, host });
+  console.log(`Mock OPNsense "${inst.name}" on http://${host}:${inst.port} (sign in as admin / ruledeck-dev)`);
+}

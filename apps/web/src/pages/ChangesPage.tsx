@@ -10,7 +10,7 @@ import { useWorkspace } from "../workspace.tsx";
  * activation → read-back verification, with each step's result shown.
  */
 export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }) {
-  const { wc, changeSet, validation, connection, firewallId, firewalls, reload, rebaseOntoFirewall, notify } = useWorkspace();
+  const { wc, changeSet, validation, site, siteId, reload, rebaseOntoFirewall, notify, recordApply, promptSignIn } = useWorkspace();
   const [reviewing, setReviewing] = useState(true);
   const [reviewed, setReviewed] = useState(false);
   const [riskAck, setRiskAck] = useState(false);
@@ -22,18 +22,23 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
   const risks = useMemo(() => (wc ? lockoutWarnings(wc) : []), [wc]);
   const pending = changeSet?.changes.length ?? 0;
   const problems = validation?.errorCount ?? 0;
-  const features = connection.status === "connected" ? connection.info.features : null;
-  const fwName = firewalls.find((f) => f.id === firewallId)?.name ?? "firewall";
+  const features = site?.signedIn ? (site.info?.features ?? null) : null;
+  const fwName = site?.name ?? "firewall";
   const counts = changeSet?.counts;
 
   const apply = async () => {
-    if (!wc || !firewallId) return;
+    if (!wc || !siteId) return;
+    if (wc.baseline.firewallId !== siteId) {
+      setError("These changes belong to a different site. Reload and try again.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setResult(null);
     try {
-      const { result } = await api.apply(firewallId, wc, riskAck);
+      const { result } = await api.apply(siteId, wc, riskAck);
       setResult(result);
+      recordApply(result);
       if (result.outcome === "success") {
         notify("success", "Changes applied and verified on the firewall.");
         setReviewing(false);
@@ -42,6 +47,7 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
         await reload({ discardLocal: true });
       }
     } catch (err) {
+      if (err instanceof ApiError && err.body.kind === "site_signed_out") promptSignIn(siteId);
       setError(err instanceof ApiError ? err.message : "Apply failed.");
     } finally {
       setBusy(false);
@@ -87,11 +93,9 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
             <li>The result is read back and compared with what you intended.</li>
           </ol>
 
-          {features && !features.rollbackTimer && (
-            <p className="hint">
-              This OPNsense version has no automatic rollback. If something goes wrong, restore the previous revision under System ▸ Configuration ▸ History.
-            </p>
-          )}
+          <p className="hint">
+            RuleDeck has no automatic rollback. If something goes wrong, restore the previous revision under System ▸ Configuration ▸ History in OPNsense.
+          </p>
 
           {risks.length > 0 && (
             <div className="risk-box" role="alert">
@@ -115,7 +119,7 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
           {problems > 0 ? (
             <p className="text-error">Fix the {problems} problem(s) first.</p>
           ) : !features ? (
-            <p className="text-error">Not connected to the firewall.</p>
+            <p className="text-error">You're not signed in to this firewall.</p>
           ) : !features.rulesWrite ? (
             <p className="text-warn">{features.notes[0] ?? "Editing isn't supported for this firewall version."}</p>
           ) : (

@@ -8,7 +8,7 @@ Delivered in `docs/`: architecture, API compatibility matrix for OPNsense 26.7 a
 
 Key findings that shaped the design:
 
-- **OPNsense 26.7 removed the savepoint / auto-rollback API** (`filter/savepoint`, `apply/{revision}`, `cancel_rollback`, `revert`). 26.1 still has it. Lockout protection on 26.7 has to come from warnings on the review screen and the config history API (`core/backup/*`).
+- **No automatic rollback.** 26.7 removed the savepoint/rollback API, and we decided not to use it on 26.1 either. Lockout protection comes from warnings on the review screen; recovery is OPNsense config history.
 - Rules reference aliases **by name**. Renaming an alias through the API rewrites references in rules.
 - `search_rule` also returns legacy and automatic rules. RuleDeck shows them read-only.
 - Order is `prio_group` (floating 200000, groups 300000+, interfaces 400000) plus `sequence`. `move_rule_before` refuses cross-group moves.
@@ -42,7 +42,7 @@ Key findings that shaped the design:
 
 **Tested:** 10 server tests against the mock (success, reorder/delete/update, conflicts by edit, reorder and name clash, partial write failure, activation failure, invalid data, risk acknowledgement, alias delete), 15 core tests for ordering/rebase/risk, and E2E tests for the full flow (add rule → inline alias → review → apply → reload → still linked) and the conflict/reconcile flow.
 
-**Not done:** nothing has been run against a real OPNsense yet. The 26.1 rollback timer is not used.
+**Not done:** nothing has been run against a real OPNsense yet.
 
 ## Phase 5: Quality and packaging
 

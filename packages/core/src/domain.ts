@@ -98,7 +98,6 @@ export interface FeatureFlags {
   rulesWrite: boolean;
   aliasesWrite: boolean;
   portSelectOptions: boolean;
-  rollbackTimer: boolean;
   /** Human-readable reasons for any disabled feature. */
   notes: string[];
 }

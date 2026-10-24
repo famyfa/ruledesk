@@ -16,8 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build -w @ruledeck/web",
-    "hash-password": "tsx apps/server/src/cli/hash-password.ts"
+    "build": "npm run build -w @ruledeck/web"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "id": "ber",
+      "name": "Berlin",
+      "primary": { "url": "https://10.1.0.2", "caFile": "/certs/ber-ca.pem" },
+      "secondary": { "url": "https://10.1.0.3", "caFile": "/certs/ber-ca.pem" }
+    },
+    {
+      "id": "muc",
+      "name": "Munich",
+      "primary": { "url": "https://10.2.0.2", "caFile": "/certs/muc-ca.pem" },
+      "secondary": { "url": "https://10.2.0.3", "caFile": "/certs/muc-ca.pem" }
+    }
+  ]
+}

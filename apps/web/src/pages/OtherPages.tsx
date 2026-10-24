@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { api, ApiError, type AuditEvent } from "../api.ts";
+import { api, ApiError } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
 
 export function OverviewPage({ go }: { go: (p: "rules" | "aliases" | "changes") => void }) {
-  const { wc, connection, changeSet, validation } = useWorkspace();
+  const { wc, site, changeSet, validation } = useWorkspace();
+  const notes = site?.info?.features.notes ?? [];
   if (!wc) return null;
   const rules = wc.current.rules;
   const ro = rules.filter((r) => r.origin !== "mvc").length;
@@ -27,11 +27,11 @@ export function OverviewPage({ go }: { go: (p: "rules" | "aliases" | "changes") 
           <span className="stat-label">problems</span>
         </div>
       </div>
-      {connection.status === "connected" && connection.info.features.notes.length > 0 && (
+      {notes.length > 0 && (
         <section>
           <h2>Notes for this firewall</h2>
           <ul>
-            {connection.info.features.notes.map((n) => (
+            {notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
@@ -42,88 +42,122 @@ export function OverviewPage({ go }: { go: (p: "rules" | "aliases" | "changes") 
   );
 }
 
-export function FirewallsPage() {
-  const { firewalls, connection } = useWorkspace();
+export function SitesPage() {
+  const { sites, siteId, selectSite, promptSignIn, updateSession, notify } = useWorkspace();
+  const signOut = async (id: string) => {
+    try {
+      updateSession(await api.signOutSite(id));
+    } catch (err) {
+      notify("error", err instanceof ApiError ? err.message : "Sign-out failed.");
+    }
+  };
   return (
     <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Host</th>
-            <th>Status</th>
+            <th>Site</th>
+            <th>Firewall</th>
+            <th>Signed in as</th>
             <th>Version</th>
             <th>Editing</th>
+            <th>HA</th>
+            <th />
           </tr>
         </thead>
         <tbody>
-          {firewalls.map((f) => (
-            <tr key={f.id}>
-              <td>{f.name}</td>
-              <td className="mono">{f.host}</td>
-              <td>{connection.status === "connected" ? "Connected" : connection.status === "error" ? `Error: ${connection.error.message}` : "Unknown"}</td>
-              <td>{connection.status === "connected" ? connection.info.productVersion : "—"}</td>
-              <td>{connection.status === "connected" ? (connection.info.features.rulesWrite ? "Supported" : "Read-only") : "—"}</td>
+          {sites.map((s) => (
+            <tr key={s.id} className={s.id === siteId ? "row-current" : undefined}>
+              <td>
+                <strong>{s.name}</strong>
+                {s.id === siteId && <span className="tag tag-reorder">open</span>}
+              </td>
+              <td className="mono">{s.host ?? "—"}</td>
+              <td>{s.signedIn ? s.user : <span className="muted">not signed in</span>}</td>
+              <td>{s.info?.productVersion ?? "—"}</td>
+              <td>{s.info ? (s.info.features.rulesWrite ? "Supported" : <span title={s.info.features.notes.join(" ")}>Read-only</span>) : "—"}</td>
+              <td>{s.hasSecondary ? "HA pair" : "single"}</td>
+              <td className="row-actions">
+                {s.signedIn ? (
+                  <>
+                    {s.id !== siteId && (
+                      <button type="button" onClick={() => selectSite(s.id)}>
+                        Open
+                      </button>
+                    )}
+                    <button type="button" onClick={() => signOut(s.id)}>
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="primary" onClick={() => promptSignIn(s.id)}>
+                    Sign in
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="hint pad">Firewalls are configured on the server (environment variables). The browser never sees API credentials.</p>
+      <p className="hint pad">
+        Sites are listed in the server's topology file. You sign in to each firewall with your own OPNsense account; RuleDeck stores no credentials and keeps
+        your firewall sessions in memory only.
+      </p>
     </div>
   );
 }
 
-export function AuditPage() {
-  const [events, setEvents] = useState<AuditEvent[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    api
-      .audit()
-      .then((r) => setEvents(r.events))
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load the audit log."));
-  }, []);
-  if (error) return <div className="banner banner-error">{error}</div>;
-  if (!events) return <p className="muted pad">Loading…</p>;
+export function HistoryPage() {
+  const { applyHistory } = useWorkspace();
   return (
-    <div className="table-scroll">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>User</th>
-            <th>Action</th>
-            <th>Outcome</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((e) => (
-            <tr key={e.id}>
-              <td>{new Date(e.at).toLocaleString()}</td>
-              <td>{e.user}</td>
-              <td className="mono">{e.action}</td>
-              <td>
-                <span className={`tag tag-${e.outcome}`}>{e.outcome}</span>
-              </td>
-              <td className="mono small">{JSON.stringify(e.details)}</td>
-            </tr>
-          ))}
-          {events.length === 0 && (
+    <div className="settings">
+      <h2>Where changes are recorded</h2>
+      <p>
+        RuleDeck keeps no log of its own. Every change it makes is saved by OPNsense under <strong>your OPNsense username</strong>, in{" "}
+        <strong>System ▸ Configuration ▸ History</strong> on each firewall. That's also where you can compare and restore earlier revisions.
+      </p>
+      <h2>Applied from this tab</h2>
+      {applyHistory.length === 0 ? (
+        <p className="muted">Nothing applied in this tab yet. This list is kept in memory only and disappears when you close the tab.</p>
+      ) : (
+        <table className="data-table">
+          <thead>
             <tr>
-              <td colSpan={5} className="muted">
-                No events yet.
-              </td>
+              <th>Time</th>
+              <th>Site</th>
+              <th>As</th>
+              <th>Outcome</th>
+              <th>Written</th>
+              <th>Activated</th>
+              <th>Verified</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {applyHistory.map((h, i) => (
+              <tr key={i}>
+                <td>{new Date(h.at).toLocaleString()}</td>
+                <td>{h.siteName}</td>
+                <td>{h.user}</td>
+                <td>
+                  <span className={`tag tag-${h.result.outcome === "success" ? "success" : "failure"}`}>{h.result.outcome}</span>
+                </td>
+                <td>
+                  {h.result.state.written}/{h.result.state.totalWrites}
+                </td>
+                <td>{h.result.state.activated ? "yes" : "no"}</td>
+                <td>{h.result.state.verified ? "yes" : "no"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
 export function SettingsPage() {
-  const { connection } = useWorkspace();
-  const f = connection.status === "connected" ? connection.info.features : null;
+  const { site } = useWorkspace();
+  const f = site?.info?.features ?? null;
   return (
     <div className="settings">
       <h2>Firewall capabilities</h2>
@@ -135,8 +169,6 @@ export function SettingsPage() {
           <dd>{f.rulesWrite ? "yes" : "no"}</dd>
           <dt>Write aliases</dt>
           <dd>{f.aliasesWrite ? "yes" : "no"}</dd>
-          <dt>Automatic rollback timer</dt>
-          <dd>{f.rollbackTimer ? "available" : "not available on this version"}</dd>
         </dl>
       ) : (
         <p className="muted">Not connected.</p>

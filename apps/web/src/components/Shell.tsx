@@ -1,19 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { canRedo, canUndo, redo, undo } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
+import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
+import { SiteSignInDialog } from "./SignIn.tsx";
 
-export type Page = "overview" | "firewalls" | "rules" | "aliases" | "changes" | "audit" | "settings";
+export type Page = "overview" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 const NAV: { page: Page; label: string; icon: string }[] = [
   { page: "overview", label: "Overview", icon: "◫" },
-  { page: "firewalls", label: "Firewalls", icon: "⛨" },
+  { page: "sites", label: "Sites", icon: "⛨" },
   { page: "rules", label: "Firewall Rules", icon: "☰" },
   { page: "aliases", label: "Aliases", icon: "⌘" },
   { page: "changes", label: "Pending Changes", icon: "Δ" },
-  { page: "audit", label: "Audit Log", icon: "⏱" },
+  { page: "history", label: "History", icon: "⏱" },
   { page: "settings", label: "Settings", icon: "⚙" },
 ];
+
+/** Pages that show the loaded rules; the others work without a loaded site. */
+const NEEDS_WORKING_COPY = new Set<Page>(["overview", "rules", "aliases", "changes"]);
 
 function isTyping(el: EventTarget | null) {
   const t = el as HTMLElement | null;
@@ -23,24 +28,26 @@ function isTyping(el: EventTarget | null) {
 export function Shell({
   page,
   setPage,
-  user,
   onLogout,
   onShowRule,
   theme,
   setTheme,
+  signInErrors,
   children,
 }: {
   page: Page;
   setPage: (p: Page) => void;
-  user: string;
   onLogout: () => void;
+  signInErrors: Record<string, ApiErrorBody>;
   onShowRule: (id: string) => void;
   theme: "light" | "dark";
   setTheme: (t: "light" | "dark") => void;
   children: ReactNode;
 }) {
   const ws = useWorkspace();
-  const { wc, changeSet, validation, connection, loading, externalChanges, restoredFrom, notices, dismiss, edit, reload, checkForExternalChanges } = ws;
+  const { wc, changeSet, validation, site, sites, loading, externalChanges, restoredFrom, notices, dismiss, edit, reload, checkForExternalChanges } = ws;
+  const [hideSignInErrors, setHideSignInErrors] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirmRefresh, setConfirmRefresh] = useState(false);
   const pending = changeSet?.changes.length ?? 0;
@@ -65,7 +72,7 @@ export function Shell({
     return () => window.removeEventListener("keydown", onKey);
   }, [edit]);
 
-  // Warn before closing the tab with unsaved work (it's also kept in localStorage).
+  // Warn before closing the tab with unsaved work (a reload keeps it; closing the tab doesn't).
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (pending > 0) e.preventDefault();
@@ -74,14 +81,14 @@ export function Shell({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [pending]);
 
-  const conn =
-    connection.status === "connected"
-      ? { cls: "ok", text: `Connected · OPNsense ${connection.info.productVersion}` }
-      : connection.status === "error"
-        ? { cls: "err", text: `Connection failed: ${connection.error.message}` }
-        : { cls: "unknown", text: loading ? "Connecting…" : "Not connected" };
-
-  const fw = ws.firewalls.find((f) => f.id === ws.firewallId);
+  const conn = !site
+    ? { cls: "unknown", text: "Not signed in to any site" }
+    : site.signedIn
+      ? { cls: "ok", text: `${site.user} · OPNsense ${site.info?.productVersion ?? "?"}` }
+      : { cls: "err", text: "Signed out of this firewall" };
+  const user = [...new Set(sites.filter((s) => s.signedIn).map((s) => s.user))].join(", ");
+  const promptSite = sites.find((s) => s.id === ws.signInPrompt);
+  const failedSites = Object.entries(signInErrors).filter(([id]) => !sites.find((s) => s.id === id)?.signedIn);
 
   return (
     <div className="shell">
@@ -114,19 +121,46 @@ export function Shell({
           </button>
           <div className="user">
             {user}{" "}
-            <button type="button" className="link-button" onClick={onLogout}>
-              Sign out
-            </button>
+            {confirmSignOut ? (
+              <span className="confirm-inline">
+                Discard {pending} staged change{pending === 1 ? "" : "s"}?{" "}
+                <button type="button" className="danger" onClick={onLogout}>
+                  Sign out
+                </button>
+                <button type="button" onClick={() => setConfirmSignOut(false)}>
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="link-button" onClick={() => (pending > 0 ? setConfirmSignOut(true) : onLogout())}>
+                Sign out
+              </button>
+            )}
           </div>
         </div>
       </nav>
 
       <div className="main-col">
         <header className="toolbar">
-          <div className="fw-select">
-            <span className="fw-name">{fw?.name ?? "No firewall"}</span>
-            <span className="muted">{fw?.host}</span>
-          </div>
+          {sites.length > 1 ? (
+            <label className="fw-select">
+              <span className="sr-only">Site</span>
+              <select className="site-select" value={ws.siteId ?? ""} onChange={(e) => ws.selectSite(e.target.value)} aria-label="Site">
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.signedIn ? "" : " (sign in…)"}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">{site?.host}</span>
+            </label>
+          ) : (
+            <div className="fw-select">
+              <span className="fw-name">{site?.name ?? "No site"}</span>
+              <span className="muted">{site?.host}</span>
+            </div>
+          )}
           <span className={`conn conn-${conn.cls}`} role="status">
             <span className="dot" aria-hidden /> {conn.text}
           </span>
@@ -182,6 +216,24 @@ export function Shell({
           </button>
         </header>
 
+        {failedSites.length > 0 && !hideSignInErrors && (
+          <div className="banner banner-warn" role="status">
+            Not signed in to{" "}
+            {failedSites.map(([id, e], i) => (
+              <span key={id}>
+                {i > 0 && ", "}
+                <button type="button" className="link-button" onClick={() => ws.promptSignIn(id)}>
+                  {sites.find((s) => s.id === id)?.name ?? id}
+                </button>{" "}
+                ({e.message})
+              </span>
+            ))}
+            .{" "}
+            <button type="button" className="link-button" onClick={() => setHideSignInErrors(true)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {restoredFrom && pending > 0 && (
           <div className="banner banner-info" role="status">
             Restored {pending} staged change{pending === 1 ? "" : "s"} from {new Date(restoredFrom).toLocaleString()}. They are still only local.
@@ -200,7 +252,9 @@ export function Shell({
         )}
 
         <main id="main" className="content">
-          {ws.loadError && !wc ? (
+          {!NEEDS_WORKING_COPY.has(page) ? (
+            children
+          ) : ws.loadError && !wc ? (
             <div className="banner banner-error" role="alert">
               {ws.loadError}{" "}
               <button type="button" onClick={() => void reload()}>
@@ -208,7 +262,7 @@ export function Shell({
               </button>
             </div>
           ) : !wc ? (
-            <p className="muted pad">{loading ? "Loading firewall configuration…" : "No firewall configured."}</p>
+            <p className="muted pad">{loading ? "Loading firewall configuration…" : site ? "Not loaded." : "You're not signed in to any site. Open Sites to sign in."}</p>
           ) : (
             children
           )}
@@ -228,6 +282,19 @@ export function Shell({
           </section>
         )}
       </div>
+
+      {promptSite && (
+        <SiteSignInDialog
+          siteId={promptSite.id}
+          siteName={promptSite.name}
+          reason={promptSite.status === "signed_out" && promptSite.user ? "Your session on this firewall ended." : undefined}
+          onCancel={() => ws.promptSignIn(null)}
+          onDone={(s) => {
+            ws.promptSignIn(null);
+            ws.updateSession(s, promptSite.id);
+          }}
+        />
+      )}
 
       <div className="notices" aria-live="polite">
         {notices.map((n) => (

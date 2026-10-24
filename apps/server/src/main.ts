@@ -17,7 +17,7 @@ try {
   if (config.host !== "127.0.0.1" && config.host !== "localhost" && config.host !== "::1") {
     app.log.warn(`Listening on ${config.host}. Make sure RuleDeck is not reachable from untrusted networks.`);
   }
-  if (!config.firewalls.length) app.log.warn("No firewall configured. Set OPNSENSE_URL, OPNSENSE_API_KEY and OPNSENSE_API_SECRET.");
+  app.log.info(`Topology: ${config.topology.sites.map((s) => s.name).join(", ")}${config.allowWrites ? "" : " (writes disabled)"}`);
   await app.listen({ host: config.host, port: config.port });
 } catch (err) {
   if (err instanceof ConfigError) {

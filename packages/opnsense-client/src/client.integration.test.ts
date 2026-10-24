@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildMockServer, type MockServer } from "../../../apps/mock-opnsense/src/server.ts";
 import { OpnsenseClient } from "./client.ts";
 import { OpnsenseError } from "./errors.ts";
+import { loginWithPassword, logoutSession, parseCsrfHeaderToken, parseLoginForm } from "./login.ts";
 
 let mock: MockServer;
 let baseUrl: string;
@@ -23,7 +24,7 @@ beforeEach(async () => {
 });
 
 const client = (over: Partial<{ apiSecret: string; timeoutMs: number }> = {}) =>
-  new OpnsenseClient({ baseUrl, apiKey: "mock-key", apiSecret: over.apiSecret ?? "mock-secret", timeoutMs: over.timeoutMs });
+  new OpnsenseClient({ baseUrl, auth: { kind: "apikey", apiKey: "mock-key", apiSecret: over.apiSecret ?? "mock-secret" }, timeoutMs: over.timeoutMs });
 
 const fault = (match: string, type: string, count = 1) =>
   fetch(`${baseUrl}/__mock/faults`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ match, type, count }]) });
@@ -96,7 +97,67 @@ describe("OpnsenseClient against the mock", () => {
   });
 
   it("maps a refused connection to a network error", async () => {
-    const c = new OpnsenseClient({ baseUrl: "http://127.0.0.1:1", apiKey: "k", apiSecret: "s" });
+    const c = new OpnsenseClient({ baseUrl: "http://127.0.0.1:1", auth: { kind: "apikey", apiKey: "k", apiSecret: "s" } });
     await expect(c.getVersion()).rejects.toMatchObject({ kind: "network" });
+  });
+});
+
+describe("signing in with username and password (GUI session)", () => {
+  const signIn = (user = "admin", pw = "ruledeck-dev") => loginWithPassword({ baseUrl }, user, pw);
+  const post = (path: string, body: unknown = {}) =>
+    fetch(`${baseUrl}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("parses the login form and the CSRF header token", () => {
+    expect(parseLoginForm('<form method="post"><input type="hidden" name="abc" value="tok" /><input name="usernamefld"></form>')).toEqual({ key: "abc", token: "tok" });
+    expect(parseCsrfHeaderToken('xhr.setRequestHeader("X-CSRFToken", "t0k" );')).toBe("t0k");
+  });
+
+  it("signs in and uses the session for reads and writes, recorded under the user", async () => {
+    const { credentials } = await signIn();
+    expect(credentials.kind).toBe("session");
+    const c = new OpnsenseClient({ baseUrl, auth: credentials });
+    const r = await c.readAll();
+    expect(r.rules.length).toBeGreaterThan(0);
+    await c.setRule(r.rules.find((x) => x.origin === "mvc")!.id, { log: "1" });
+    const { history } = (await (await fetch(`${baseUrl}/__mock/history`)).json()) as { history: { user: string }[] };
+    expect(history.at(-1)!.user).toBe("admin");
+  });
+
+  it("rejects a wrong password without leaking it", async () => {
+    const err = await signIn("admin", "wrong-password-123").catch((e) => e);
+    expect(err).toBeInstanceOf(OpnsenseError);
+    expect(err.kind).toBe("auth");
+    expect(JSON.stringify(err.toJSON())).not.toContain("wrong-password-123");
+  });
+
+  it("reports missing privileges as forbidden, not as signed out", async () => {
+    const { credentials } = await signIn("viewer", "viewer-pass");
+    const c = new OpnsenseClient({ baseUrl, auth: credentials });
+    await c.readAll().catch(() => {}); // reading options may be partly forbidden
+    await expect(c.setRule("0c6f0f84-1b2a-4c1e-8f0e-000000000002", { log: "1" })).rejects.toMatchObject({ kind: "forbidden" });
+  });
+
+  it("treats an expired firewall session as signed out", async () => {
+    const { credentials } = await signIn();
+    const c = new OpnsenseClient({ baseUrl, auth: credentials });
+    await post("/__mock/expire-sessions");
+    await expect(c.getVersion()).rejects.toMatchObject({ kind: "auth" });
+  });
+
+  it("refuses API writes without the CSRF token", async () => {
+    const { credentials } = await signIn();
+    const c = new OpnsenseClient({ baseUrl, auth: { ...credentials, csrfToken: "nope" } });
+    await expect(c.setRule("0c6f0f84-1b2a-4c1e-8f0e-000000000002", { log: "1" })).rejects.toMatchObject({ kind: "forbidden" });
+  });
+
+  it("explains the DNS-rebind protection page", async () => {
+    await post("/__mock/dns-rebind", { on: true });
+    await expect(signIn()).rejects.toThrow(/DNS-rebind/);
+  });
+
+  it("logs out of the firewall session", async () => {
+    const { credentials } = await signIn();
+    await logoutSession({ baseUrl }, credentials);
+    await expect(new OpnsenseClient({ baseUrl, auth: credentials }).getVersion()).rejects.toMatchObject({ kind: "auth" });
   });
 });

@@ -62,7 +62,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Concurrent-modification detection (conflict view: discard / reconcile / recreate)
 - [x] Review screen: adds, modifies, deletes, reorders; lockout-risk warnings
 - [x] Explicit confirmation before apply
-- [x] Apply via verified API calls (writes → alias reconfigure → filter apply; 26.1 rollback timer not used yet)
+- [x] Apply via verified API calls (writes → alias reconfigure → filter apply; no automatic rollback by design)
 - [x] Read back + verify result; staged vs written vs active states shown
 - [x] Audit log (who, what, outcome; no secrets) in a small DB
 - [x] Recovery guidance after partial failures
@@ -72,10 +72,43 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 ## 6. Phase 5 — Quality & packaging
 - [x] E2E test: the full "add rule → inline alias → review → apply → reload" flow
 - [ ] Docker Compose deployment (no cloud deps, not exposed publicly by default): Dockerfile + compose written and production mode tested without Docker; **image build not yet tested** (Docker engine wasn't running)
-- [ ] Backup/restore of RuleDeck settings
-- [ ] Encrypted credential storage with documented key strategy
+- [x] ~~Backup/restore of RuleDeck settings~~ (dropped: RuleDeck stores nothing)
+- [x] ~~Encrypted credential storage~~ (dropped: no credentials are stored)
 - [x] Rate limiting on sensitive routes
 - [ ] Version compatibility checks against real OPNsense instances
 - [ ] Security review
 - [ ] Usability polish
 - [x] Docs: development.md, README updated
+
+## 7. Product decisions (2026-10-24)
+- [x] No automatic rollback, ever. Recovery = OPNsense config history
+- [x] RuleDeck stores nothing: no database, no stored credentials, no local admin
+- [x] Sign in with OPNsense username + password (local/LDAP/RADIUS/TOTP decided by the firewall); API key as fallback
+- [x] Non-secret topology file (sites, HA nodes, interface mapping) is OK
+- [x] HA sync to the secondary: checkbox per apply
+- [x] Shared objects marked with OPNsense category "RuleDeck shared"
+
+## 8. Stateless sign-in (Phase 6)
+- [x] Adversarial review (4 reviewers + 2 verifiers per finding): 19 confirmed findings fixed, with tests
+- [x] Remove SQLite audit log, admin password, hash-password CLI, data dir
+- [x] Topology file: sites, primary/secondary URLs, CA, interface map (zod, strict)
+- [x] OPNsense GUI-session client: login form (username/password), session cookie + X-CSRFToken for API calls, logout
+- [x] API-key auth kept as alternative per site
+- [x] Mock: GUI login form + session/CSRF auth, per-user privileges, session timeout
+- [x] Server sessions hold only per-site OPNsense sessions (memory), expiry + re-auth per site
+- [x] Sign-in page: one card per site; per-site status; re-auth popover on expiry
+- [x] Tests: login ok / wrong password / missing privilege / DNS-rebind error / expiry; no secrets in responses or logs
+- [x] Docs: security model, operator guide for users/privileges
+
+## 9. Multi-site shared policy (Phase 7)
+- [ ] Mock: multiple instances (2 sites x HA pair), upsert by uuid, categories, hasync
+- [ ] Client: upsert create by uuid, categories, hasync get/version/restart_all
+- [x] Core: shared.ts (localize/canonicalize via interface map, label/kind guards, eligibility rules)
+- [x] Core: buildSharedView + drift detection (missing, differs, unmarked, unmappable, order)
+- [x] Core: projectToSite with slot-based ordering; new objects carry their final uuid (`new:<uuid>`)
+- [ ] Server: shared preflight (all sites, read-only) + sequential shared apply, stop on first failure
+- [ ] Server: HA role check, sync trigger, secondary verification
+- [ ] UI: scope switcher (Shared / per site), shared rows locked in site view, share dialog
+- [ ] UI: drift panel with resolutions, per-site review + acknowledgement, per-site result timeline, "Finish at site"
+- [ ] E2E: build a rule once → applied at both sites with correct interface mapping → HA synced → no drift
+- [ ] Docs: multi-site operator guide

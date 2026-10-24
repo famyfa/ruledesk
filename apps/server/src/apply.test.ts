@@ -23,7 +23,7 @@ beforeAll(async () => {
   await mock.app.listen({ port: 0, host: "127.0.0.1" });
   const addr = mock.app.server.address() as { port: number };
   base = `http://127.0.0.1:${addr.port}`;
-  client = new OpnsenseClient({ baseUrl: base, apiKey: "mock-key", apiSecret: "mock-secret", timeoutMs: 2000 });
+  client = new OpnsenseClient({ baseUrl: base, auth: { kind: "apikey", apiKey: "mock-key", apiSecret: "mock-secret" }, timeoutMs: 2000 });
 });
 afterAll(async () => {
   await client.close();

@@ -5,36 +5,47 @@ export interface ApiErrorBody {
   message: string;
   endpoint?: string;
   status?: number;
+  siteId?: string;
   validations?: Record<string, string | string[]>;
 }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, public readonly body: ApiErrorBody) {
+  constructor(
+    public readonly status: number,
+    public readonly body: ApiErrorBody,
+    public readonly extra: Record<string, unknown> = {},
+  ) {
     super(body.message);
   }
 }
 
-export type ConnectionState =
-  | { status: "unknown" }
-  | { status: "connected"; info: FirewallInfo; checkedAt: string }
-  | { status: "error"; error: ApiErrorBody; checkedAt: string };
+export interface PublicTopology {
+  hash: string;
+  sites: { id: string; name: string; hasSecondary: boolean }[];
+  logicalInterfaces: string[];
+}
 
-export interface FirewallSummary {
+export interface SiteView {
   id: string;
   name: string;
-  host: string;
-  state: ConnectionState;
+  hasSecondary: boolean;
+  signedIn: boolean;
+  status: "ok" | "signed_out";
+  user: string | null;
+  method: "password" | "apikey" | null;
+  host: string | null;
+  info: FirewallInfo | null;
 }
 
-export interface AuditEvent {
-  id: number;
-  at: string;
-  user: string;
-  action: string;
-  firewallId: string | null;
-  outcome: string;
-  details: Record<string, unknown>;
+export interface SessionView {
+  csrfToken: string;
+  topologyHash: string;
+  sites: SiteView[];
 }
+
+export type SiteLogin =
+  | { method: "password"; username: string; password: string }
+  | { method: "apikey"; apiKey: string; apiSecret: string };
 
 export interface Conflict {
   objectType: "rule" | "alias";
@@ -57,6 +68,12 @@ export interface ApplyResult {
 }
 
 let csrfToken = "";
+let onUnauthenticated: () => void = () => {};
+
+/** Called when RuleDeck's own session has ended (idle timeout, server restart). */
+export function setUnauthenticatedHandler(fn: () => void) {
+  onUnauthenticated = fn;
+}
 
 async function request<T>(method: "GET" | "POST", url: string, body?: unknown): Promise<T> {
   let res: Response;
@@ -74,34 +91,54 @@ async function request<T>(method: "GET" | "POST", url: string, body?: unknown): 
     throw new ApiError(0, { kind: "offline", message: "Can't reach the RuleDeck server." });
   }
   const data = (await res.json().catch(() => ({}))) as { error?: ApiErrorBody } & T;
-  if (!res.ok) throw new ApiError(res.status, data.error ?? { kind: "http", message: `HTTP ${res.status}` });
+  if (!res.ok) {
+    const error = data.error ?? { kind: "http", message: `HTTP ${res.status}` };
+    if (res.status === 401 && error.kind === "unauthenticated" && !url.startsWith("/api/auth/")) onUnauthenticated();
+    throw new ApiError(res.status, error, data as Record<string, unknown>);
+  }
   return data;
 }
 
+const site = (id: string) => `/api/sites/${encodeURIComponent(id)}`;
+
 export const api = {
+  topology: () => request<PublicTopology>("GET", "/api/topology"),
   async session() {
-    const r = await request<{ user: string; csrfToken: string }>("GET", "/api/auth/session");
+    const r = await request<SessionView>("GET", "/api/auth/session");
     csrfToken = r.csrfToken;
     return r;
   },
-  async login(username: string, password: string) {
-    const r = await request<{ user: string; csrfToken: string }>("POST", "/api/auth/login", { username, password });
+  /** Sign in to several sites at once. Per-site failures come back in siteErrors. */
+  async login(sites: Record<string, SiteLogin>) {
+    const r = await request<SessionView & { siteErrors: Record<string, ApiErrorBody> }>("POST", "/api/auth/login", { sites });
     csrfToken = r.csrfToken;
     return r;
   },
+  async signInSite(id: string, login: SiteLogin) {
+    // The server issues a new session id and CSRF token when a site is added.
+    const r = await request<SessionView>("POST", `/api/auth/sites/${encodeURIComponent(id)}`, login);
+    csrfToken = r.csrfToken;
+    return r;
+  },
+  signOutSite: (id: string) => request<SessionView>("POST", `/api/auth/sites/${encodeURIComponent(id)}/logout`),
   async logout() {
     await request("POST", "/api/auth/logout");
     csrfToken = "";
   },
-  firewalls: () => request<{ firewalls: FirewallSummary[] }>("GET", "/api/firewalls"),
-  connect: (id: string) => request<{ state: ConnectionState }>("POST", `/api/firewalls/${encodeURIComponent(id)}/connect`),
-  snapshot: (id: string) => request<{ snapshot: FirewallSnapshot }>("GET", `/api/firewalls/${encodeURIComponent(id)}/snapshot`),
-  audit: () => request<{ events: AuditEvent[] }>("GET", "/api/audit"),
+  connect: (id: string) => request<{ site: SiteView }>("POST", `${site(id)}/connect`),
+  snapshot: (id: string) => request<{ snapshot: FirewallSnapshot }>("GET", `${site(id)}/snapshot`),
   apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
-    request<{ result: ApplyResult }>("POST", `/api/firewalls/${encodeURIComponent(id)}/apply`, {
+    request<{ result: ApplyResult }>("POST", `${site(id)}/apply`, {
       baseline: wc.baseline,
       current: wc.current,
       confirm: true,
       acknowledgeRisks,
     }),
 };
+
+/** Parse OPNsense's downloaded apikey.txt ("key=..." / "secret=..."). */
+export function parseApiKeyFile(text: string): { apiKey: string; apiSecret: string } | null {
+  const key = /^\s*key\s*=\s*(\S+)\s*$/m.exec(text)?.[1];
+  const secret = /^\s*secret\s*=\s*(\S+)\s*$/m.exec(text)?.[1];
+  return key && secret ? { apiKey: key, apiSecret: secret } : null;
+}

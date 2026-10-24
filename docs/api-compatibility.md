@@ -5,7 +5,11 @@
 
 "Verified (source)" means checked against the OPNsense core source code at that tag. Nothing here has been verified against a running instance yet. That column will be filled in once integration tests run against a disposable test VM.
 
-Base URL: `https://<host>/api/<module>/<controller>/<command>[/<param>...]`. Auth: HTTP Basic with API key as username and secret as password. Bodies are JSON. GET reads, POST writes.
+Base URL: `https://<host>/api/<module>/<controller>/<command>[/<param>...]`. Bodies are JSON. GET reads, POST writes.
+
+**Authentication** (verified in source, `ApiControllerBase::beforeExecuteRoute`, 26.7.7):
+- *GUI session (default in RuleDeck):* sign in through the login form at `/` (`authgui.inc`: hidden CSRF field, `usernamefld`, `passwordfld`, `login`; success = redirect plus regenerated `PHPSESSID`). API calls then send the cookie, plus `X-CSRFToken` on POST. No session gives 401, missing privilege 403, bad CSRF 403. A password-change requirement redirects to `/ui/user_portal`. Logout is `GET /index.php?logout`. The session timeout comes from the firewall (default 4 h). Changes are recorded in config history under the user.
+- *API key (fallback):* HTTP Basic with key as username and secret as password.
 
 ## Version detection
 
@@ -31,10 +35,8 @@ The server reads this at connect time and turns on feature flags (below). Unknow
 | Network options | `filter/list_network_select_options` | GET | source | source | ☐ | `any`, `(self)`, `<if>`, `<if>ip`, non-port aliases |
 | Port options | `filter/list_port_select_options` | GET | source | **26.1+** | ☐ | Well-known ports + port aliases. Not in 25.7 |
 | Activate | `filter/apply` | POST | source | source | ☐ | Runs `filter reload skip_alias`. Returns `{"status": "<configd output>"}` |
-| Savepoint | `filter/savepoint` | POST | **removed** | source | ☐ | Returns `revision` |
-| Apply with rollback timer | `filter/apply/{revision}` | POST | **removed** | source | ☐ | Auto-reverts after a timeout unless cancelled |
-| Cancel rollback | `filter/cancel_rollback/{revision}` | POST | **removed** | source | ☐ | |
-| Revert | `filter/revert/{revision}` | POST | **removed** | source | ☐ | |
+
+RuleDeck does **not** use automatic rollback (`filter/savepoint` etc., removed in 26.7 anyway). That's a deliberate decision.
 
 ## Aliases (`firewall/alias`, model `Alias.xml` v1.0.1 in 25.7–26.7)
 
@@ -62,7 +64,7 @@ Alias types (from model): `host`, `network`, `port`, `url`, `urltable`, `urljson
 | Revert | `core/backup/revert_backup/{backup}` | POST | source | source | ☐ |
 | Download | `core/backup/download/{host}/{backup}` | GET | source | source | ☐ |
 
-Every MVC save creates a new config history entry. That is the recovery mechanism RuleDeck documents for 26.7, which has no savepoint API.
+Every MVC save creates a new config history entry. That is RuleDeck's recovery mechanism on all versions.
 
 ## Feature flags by version
 
@@ -72,7 +74,6 @@ Every MVC save creates a new config history entry. That is the recovery mechanis
 | `rules.write` | untested | yes | yes |
 | `rules.portSelectOptions` | no | yes | yes |
 | `rules.receivedOn` field | no | no | yes |
-| `apply.rollbackTimer` | yes | yes | **no** |
 | `aliases.write` | untested | yes | yes |
 
 ## How RuleDeck writes (Phase 4)
@@ -88,7 +89,7 @@ Every MVC save creates a new config history entry. That is the recovery mechanis
 
 **Ordering is written through the `sequence` field (`set_rule`), not `move_rule_before`.** Order is defined as `prio_group` + `sequence`, and `sequence` is a normal writable model field. Writing it directly is deterministic, idempotent and needs one call per moved rule. `move_rule_before` renumbers neighbours in ways that depend on gaps. RuleDeck keeps the longest already-ordered run of rules unchanged and only renumbers the rest (`planOrdering` in `packages/core/src/ordering.ts`).
 
-The 26.1 rollback timer (`savepoint` / `apply/{revision}`) is **not used yet**. Recovery on both versions relies on config history (every save creates a revision).
+There is no automatic rollback. Recovery relies on config history (every save creates a revision).
 
 ## Known limitations
 

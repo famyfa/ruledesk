@@ -29,31 +29,34 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev**. This starts three processes:
+Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev** (an account on the mock firewalls). This starts:
 
 | Process | Address | Purpose |
 |---|---|---|
-| mock OPNsense | http://127.0.0.1:8443 | Fake firewall with seed rules and aliases |
+| mock OPNsense ×2 | http://127.0.0.1:8443, :8444 | Two fake firewalls (sites Berlin and Munich) with seed rules and aliases |
 | server | http://127.0.0.1:3000 | RuleDeck backend (holds the API credentials) |
 | web | http://127.0.0.1:5173 | UI (Vite dev server, proxies `/api`) |
 
-## Connecting a real OPNsense
+## Connecting real firewalls
 
-1. In OPNsense, create a dedicated user with an API key and only the privileges listed in [docs/security.md](docs/security.md).
-2. Copy `.env.example` to `apps/server/.env` and fill in `OPNSENSE_URL`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`.
-3. Generate an admin password hash with `npm run hash-password` and put it in `RULEDECK_ADMIN_PASSWORD_HASH`.
-4. If the firewall uses a self-signed certificate, export its CA and set `OPNSENSE_CA_FILE`. TLS verification can't be turned off.
+RuleDeck stores nothing: no database, no credentials, no local users. You sign in with **your own OPNsense account** (local, LDAP, RADIUS, TOTP; whatever the firewall uses), or with an API key. Changes show up in each firewall's config history under your name.
+
+1. Copy `ruledeck.topology.example.json` to `ruledeck.topology.json` and list your sites (the primary firewall URL, and the HA secondary if any). This file contains no secrets.
+2. Copy `.env.example` to `apps/server/.env` and point `RULEDECK_TOPOLOGY_FILE` at the topology.
+3. If a firewall uses a self-signed certificate, export its CA and set `caFile` for it in the topology. TLS verification can't be turned off.
+4. Make sure your OPNsense users have the privileges listed in [docs/security.md](docs/security.md).
 
 Writes stay disabled until you set `RULEDECK_ALLOW_WRITES=true`. **Test against a disposable OPNsense VM first, never a production firewall.**
 
 ## Running with Docker Compose
 
 ```sh
-cp .env.example apps/server/.env      # fill it in (see above)
+cp .env.example apps/server/.env
+cp ruledeck.topology.example.json ruledeck.topology.json   # list your firewalls
 docker compose up -d --build
 ```
 
-Open http://127.0.0.1:3000. The container serves the UI and API on one port, bound to localhost only, with a read-only filesystem and all capabilities dropped. Data (audit log) lives in the `ruledeck-data` volume. Keep the password hash in single quotes in the env file (`npm run hash-password` prints it that way) so the `$` signs aren't interpolated.
+Open http://127.0.0.1:3000 and sign in with your OPNsense account. The container serves the UI and API on one port, bound to localhost only, with a read-only filesystem, no volume and all capabilities dropped.
 
 Browsers only send the session cookie over HTTPS or `http://localhost`. To use RuleDeck from another machine, put a TLS reverse proxy in front of it. Don't expose it to the internet.
 

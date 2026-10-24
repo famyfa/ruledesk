@@ -121,11 +121,13 @@ describe("versions", () => {
     expect(parseVersion("garbage")).toBeNull();
   });
   it("enables writes only on verified series", () => {
-    expect(featuresFor("26.7.7")).toMatchObject({ rulesWrite: true, rollbackTimer: false, portSelectOptions: true });
-    expect(featuresFor("26.1.3")).toMatchObject({ rulesWrite: true, rollbackTimer: true });
+    expect(featuresFor("26.7.7")).toMatchObject({ rulesWrite: true, portSelectOptions: true });
+    expect(featuresFor("26.1.3")).toMatchObject({ rulesWrite: true });
     expect(featuresFor("25.7.1")).toMatchObject({ rulesWrite: false, portSelectOptions: false });
     expect(featuresFor("27.1")).toMatchObject({ rulesWrite: false });
     expect(featuresFor("27.1").notes[0]).toMatch(/not been verified/);
+    expect(featuresFor(null)).toMatchObject({ rulesWrite: false });
+    expect(featuresFor(null).notes[0]).toMatch(/System: Firmware/);
   });
 });
 
@@ -151,6 +153,7 @@ describe("error mapping", () => {
   it("maps statuses and bodies", () => {
     expect(mapResponseError(200, { result: "saved" }, "x")).toBeNull();
     expect(mapResponseError(401, {}, "x")?.kind).toBe("auth");
+    expect(mapResponseError(403, {}, "x")?.kind).toBe("forbidden");
     expect(mapResponseError(404, {}, "x")?.kind).toBe("unsupported");
     expect(mapResponseError(500, {}, "x")?.kind).toBe("server");
     expect(mapResponseError(200, { errorMessage: "Alias in use" }, "x")?.kind).toBe("rejected");

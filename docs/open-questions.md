@@ -14,13 +14,13 @@ Each of these needs checking against a running OPNsense instance before write op
 8. **Validation keys.** Confirm the `rule.<field>` / `alias.<field>` keys for every field we map back to cells.
 9. **Privilege names** for the minimal API user on each release.
 10. **Sequence writes.** Confirm on a live instance that `set_rule` with only `sequence` reorders as expected on both releases (the source says yes).
-11. **26.7 recovery.** With savepoint/rollback removed, is `core/backup/revert_backup` + `filter/apply` a safe documented recovery path? What happens to aliases?
+11. **Recovery.** Without automatic rollback, is `core/backup/revert_backup` + `filter/apply` a safe documented recovery path? What happens to aliases?
 
 ## Compatibility risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Savepoint/rollback API removed in 26.7 | No automatic lockout protection on current stable | Lockout warnings on review screen. Config history recovery guide. Use rollback timer only when the flag is present |
+| No automatic rollback (by design) | No automatic lockout protection | Lockout warnings and acknowledgement on the review screen. Config history recovery guide |
 | Model fields change between releases (e.g. `received-on` added in 26.7) | Unknown fields could be lost | Partial writes. `extra` preserves unknown fields. Clones copy all non-volatile fields |
 | Reordering via `sequence` writes | If OPNsense ever recomputed sequences on save, order could differ | Minimal renumbering, a whole-group conflict check before writing, and read-back comparison of the final order |
 | Alias rename refactors rules server-side | Our pending rule edits might reference the old name | Apply alias renames before rule writes, then rewrite pending references by name |

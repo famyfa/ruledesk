@@ -1364,3 +1364,75 @@ input[aria-invalid="true"] {
 .form-actions.left {
   justify-content: flex-start;
 }
+
+/* ---------------------------------------------------------------- sign-in */
+.login-wide {
+  width: 420px;
+}
+.site-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px 10px;
+  margin: 4px 0;
+}
+.site-card legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.cred-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 6px;
+  align-self: flex-start;
+}
+.segmented button {
+  border: 0;
+  border-radius: 0;
+  padding: 3px 10px;
+}
+.segmented button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.site-errors {
+  margin: 4px 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--invalid-fg);
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 80;
+}
+.modal {
+  width: 380px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
+}
+.modal h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.site-select {
+  font-weight: 600;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.row-current td {
+  background: var(--accent-soft);
+}

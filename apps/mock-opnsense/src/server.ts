@@ -10,15 +10,23 @@ import {
   WELL_KNOWN_PORTS,
   type RawRecord,
 } from "./state.ts";
+import { MockAuth, type MockAuthOptions } from "./auth.ts";
 
-export interface MockServerOptions {
+export interface MockServerOptions extends MockAuthOptions {
+  /** Shorthand for a single API key for the "root" user. */
   apiKey?: string;
   apiSecret?: string;
   version?: string;
   logger?: boolean;
 }
 
-export type FaultType = "validation" | "timeout" | "http500" | "unsupported";
+/** One change recorded with the user who made it, like OPNsense's config history. */
+export interface HistoryEntry {
+  user: string;
+  endpoint: string;
+}
+
+export type FaultType = "validation" | "timeout" | "http500" | "unsupported" | "slow";
 
 interface Fault {
   match: string;
@@ -29,6 +37,8 @@ interface Fault {
 export interface MockServer {
   app: FastifyInstance;
   state: () => MockState;
+  auth: MockAuth;
+  history: () => HistoryEntry[];
 }
 
 /** Turn an option-field value into OPNsense's `{key: {value, selected}}` map. */
@@ -38,10 +48,13 @@ function optionMap(options: Record<string, string>, selected: string) {
 }
 
 export function buildMockServer(opts: MockServerOptions = {}): MockServer {
-  const apiKey = opts.apiKey ?? "mock-key";
-  const apiSecret = opts.apiSecret ?? "mock-secret";
+  const auth = new MockAuth({
+    ...opts,
+    apiKeys: opts.apiKeys ?? { [opts.apiKey ?? "mock-key"]: { secret: opts.apiSecret ?? "mock-secret", user: "root" } },
+  });
   let state = new MockState({ version: opts.version });
   let faults: Fault[] = [];
+  let history: HistoryEntry[] = [];
 
   const app = Fastify({ logger: opts.logger ?? false, forceCloseConnections: true });
 
@@ -56,15 +69,14 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     }
   });
 
-  const expected = "Basic " + Buffer.from(`${apiKey}:${apiSecret}`).toString("base64");
+  auth.register(app);
 
   app.addHook("onRequest", async (req, reply) => {
-    if (req.url.startsWith("/__mock/")) return;
-    if (req.headers.authorization !== expected) {
-      reply.code(401).send({ status: 401, message: "Authentication Failed" });
-      return reply;
-    }
+    if (!req.url.startsWith("/api/")) return;
     const path = req.url.replace(/^\/api\//, "").split("?")[0]!;
+    const user = auth.authenticateApi(req, reply, path);
+    if (!user) return reply;
+    if (req.method === "POST" && !/search|get_|list_/.test(path)) history.push({ user, endpoint: path });
     const idx = faults.findIndex((f) => path.startsWith(f.match) && f.count > 0);
     if (idx >= 0) {
       const fault = faults[idx]!;
@@ -74,6 +86,9 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
         case "timeout":
           await new Promise((r) => setTimeout(r, 60_000).unref());
           return reply;
+        case "slow":
+          await new Promise((r) => setTimeout(r, 400).unref());
+          break;
         case "http500":
           reply.code(500).send({ errorMessage: "Internal Error", errorTitle: "An error occurred" });
           return reply;
@@ -98,6 +113,8 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     const body = (req.body ?? {}) as { version?: string };
     state = new MockState({ version: body.version ?? opts.version });
     faults = [];
+    history = [];
+    auth.dnsRebind = opts.dnsRebind ?? false;
     return { status: "ok" };
   });
   app.post("/__mock/faults", async (req) => {
@@ -114,6 +131,15 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     state.pendingApply = true;
     return { status: "ok", uuid };
   });
+  app.post("/__mock/expire-sessions", async () => {
+    auth.expireSessions();
+    return { status: "ok" };
+  });
+  app.post("/__mock/dns-rebind", async (req) => {
+    auth.dnsRebind = Boolean((req.body as { on?: boolean } | undefined)?.on ?? true);
+    return { status: "ok" };
+  });
+  app.get("/__mock/history", async () => ({ history }));
   app.get("/__mock/state", async () => ({
     version: state.version,
     pendingApply: state.pendingApply,
@@ -318,5 +344,5 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
 
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ errorMessage: "Endpoint not found" }));
 
-  return { app, state: () => state };
+  return { app, state: () => state, auth, history: () => history };
 }

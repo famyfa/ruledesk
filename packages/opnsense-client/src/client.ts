@@ -59,8 +59,12 @@ export interface ReadResult {
 export class OpnsenseClient {
   readonly http: OpnsenseHttp;
 
+  /** The credentials this client signs in with (kept in memory only, never sent to the browser). */
+  readonly credentials: ConnectionConfig["auth"];
+
   constructor(cfg: ConnectionConfig) {
     this.http = new OpnsenseHttp(cfg);
+    this.credentials = cfg.auth;
   }
 
   async close() {
@@ -70,6 +74,22 @@ export class OpnsenseClient {
   async getVersion(): Promise<string> {
     const info = parseOrThrow(FirmwareInfo, await this.http.get(EP.firmwareInfo), EP.firmwareInfo);
     return info.product_version;
+  }
+
+  /**
+   * Prove the credentials work and read the version. OPNsense has no "whoami",
+   * so listing one rule is the proof (it needs the rules privilege anyway).
+   * The version needs the firmware privilege; without it, `version` is null.
+   */
+  async probe(): Promise<{ version: string | null }> {
+    let version: string | null = null;
+    try {
+      version = await this.getVersion();
+    } catch (err) {
+      if (!(err instanceof OpnsenseError && err.kind === "forbidden")) throw err;
+    }
+    await this.http.post(EP.searchRule, { body: { current: 1, rowCount: 1, searchPhrase: "", sort: {} } });
+    return { version };
   }
 
   /** Page through a search endpoint until all rows are read. */

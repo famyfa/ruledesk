@@ -57,6 +57,10 @@ test.describe("apply to firewall", () => {
     expect(rule?.destination_port).toBe("443");
     expect(state.pendingApply).toBe(false);
 
+    // RuleDeck itself keeps only an in-memory list for this tab (gone after a reload).
+    await page.getByRole("button", { name: "History" }).click();
+    await expect(page.getByRole("cell", { name: "success" })).toBeVisible();
+
     // Reload the app: rule and alias come from the firewall and are still linked.
     await page.reload();
     await page.getByRole("button", { name: "Firewall Rules" }).click();
@@ -66,9 +70,10 @@ test.describe("apply to firewall", () => {
     await expect(reloaded.getByText("+ NEW")).toHaveCount(0);
     await expect(reloaded.locator("td.col-destination .chip-alias")).toHaveAttribute("title", /192\.168\.1\.10/);
 
-    // The audit log recorded it.
-    await page.getByRole("button", { name: "Audit Log" }).click();
-    await expect(page.getByRole("cell", { name: "firewall.apply" }).first()).toBeVisible();
+    // The firewall recorded the change under the OPNsense user (its config history).
+    const history = (await (await fetch(`${MOCK}/__mock/history`)).json()) as { history: { user: string }[] };
+    expect(history.history.length).toBeGreaterThan(0);
+    expect(history.history.every((h) => h.user === "admin")).toBe(true);
   });
 
   test("a change made elsewhere is detected and nothing is overwritten", async ({ page }) => {

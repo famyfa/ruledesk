@@ -4,7 +4,8 @@
  */
 
 export type OpnsenseErrorKind =
-  | "auth" // 401/403: bad key/secret or missing privilege
+  | "auth" // 401 / expired session: not (or no longer) signed in
+  | "forbidden" // 403: signed in, but the OPNsense user lacks the privilege
   | "unsupported" // 404: endpoint not available on this version
   | "validation" // result: failed + validations
   | "rejected" // OPNsense refused the operation (errorMessage), e.g. alias in use
@@ -61,7 +62,7 @@ export function mapTransportError(err: unknown, endpoint: string): OpnsenseError
   if (TLS_CODES.has(code)) {
     return new OpnsenseError(
       "tls",
-      `The firewall's TLS certificate could not be verified (${code}). Provide its CA via OPNSENSE_CA_FILE.`,
+      `The firewall's TLS certificate could not be verified (${code}). Add its CA certificate as "caFile" for this firewall in the topology file.`,
       { endpoint },
     );
   }
@@ -74,8 +75,20 @@ export function mapTransportError(err: unknown, endpoint: string): OpnsenseError
 /** Map an HTTP response status/body into an error, or null when it is a success. */
 export function mapResponseError(status: number, body: unknown, endpoint: string): OpnsenseError | null {
   const b = (body ?? {}) as Record<string, unknown>;
-  if (status === 401 || status === 403) {
-    return new OpnsenseError("auth", "The firewall rejected the API credentials or the API user lacks the privilege for this action.", { endpoint, status });
+  if (status === 401) {
+    return new OpnsenseError("auth", "The firewall did not accept the sign-in (wrong credentials or the session ended).", { endpoint, status });
+  }
+  if (status === 403) {
+    // OPNsense answers an ACL denial with JSON {status: 403}; a failed CSRF check
+    // on a session request has an empty body. Don't send admins chasing ACLs then.
+    const aclDenial = typeof b.status === "number" || typeof b.message === "string";
+    return new OpnsenseError(
+      "forbidden",
+      aclDenial
+        ? `Your OPNsense user lacks the privilege for ${endpoint}.`
+        : `The firewall refused ${endpoint} (missing privilege, or the firewall session's security token was rejected; signing in again helps in that case).`,
+      { endpoint, status },
+    );
   }
   if (status === 404) {
     return new OpnsenseError("unsupported", "This API endpoint is not available on the connected OPNsense version.", { endpoint, status });
