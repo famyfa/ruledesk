@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addAlias,
   addRule,
+  batch,
   canRedo,
   canUndo,
   cloneRule,
@@ -116,6 +117,14 @@ describe("undo / redo", () => {
     wc = redo(wc);
     expect(wc.current.rules[0]?.action).toBe("block");
     expect(canRedo(wc)).toBe(true);
+  });
+
+  it("undoes a batch in one step", () => {
+    let wc = base();
+    wc = batch(wc, (w) => updateRule(updateRule(w, "r1", { log: true }), "r2", { log: true }));
+    expect(wc.past).toHaveLength(1);
+    wc = undo(wc);
+    expect(wc.current.rules.some((r) => r.log)).toBe(false);
   });
 
   it("clears redo after a new edit", () => {

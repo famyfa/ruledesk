@@ -64,6 +64,13 @@ export function redo(wc: WorkingCopy): WorkingCopy {
   return { ...wc, current: next, past: [...wc.past, wc.current], future: wc.future.slice(1) };
 }
 
+/** Run several edits as one undo step (e.g. a multi-cell paste). */
+export function batch(wc: WorkingCopy, fn: (wc: WorkingCopy) => WorkingCopy): WorkingCopy {
+  const result = fn(wc);
+  if (result.current === wc.current) return wc;
+  return { ...result, past: [...wc.past, wc.current].slice(-HISTORY_LIMIT), future: [] };
+}
+
 /** Throw away all local edits. */
 export function discardAll(wc: WorkingCopy): WorkingCopy {
   return commit(wc, { rules: wc.baseline.rules, aliases: wc.baseline.aliases, nextLocalId: wc.current.nextLocalId });

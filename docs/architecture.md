@@ -48,12 +48,13 @@ Packages export their TypeScript source directly (no build step during developme
 
 | Option | License | Editing / keyboard | Clipboard | Virtualization | Notes |
 |---|---|---|---|---|---|
-| **TanStack Table + TanStack Virtual** | MIT | Headless; we build cells | We build it | Yes | Full control over editing, popovers, a11y. **Chosen.** |
+| **Purpose-built grid + TanStack Virtual** | MIT | Built for our editing model | Built in (TSV copy/paste) | Yes | **Chosen.** Full control over inline pickers, the alias popover and a11y |
+| TanStack Table | MIT | Headless, we'd still build every cell | We'd build it | via TanStack Virtual | Adds a column model we didn't need, so we skipped it |
 | AG Grid Community | MIT | Good | Range copy/paste is Enterprise (paid) | Yes | Clipboard and range selection need a paid license, which rules it out |
 | Glide Data Grid | MIT | Good | Good | Yes | Canvas rendering makes inline popovers and screen-reader support harder |
 | Handsontable | Commercial for non-eval use | Excellent | Excellent | Yes | Paid license |
 
-TanStack is headless, so the editing model (spec §3.3) is built in `apps/web/src/grid`. This costs more code but gives full control over the signature inline-alias interaction.
+The grid lives in `apps/web/src/grid`: `RuleGrid.tsx` (navigation, selection, clipboard, drag and drop), `editors.tsx` (cell editors and the inline alias popover), `columns.tsx` (rendering and paste parsing per column). It's a real `<table role="grid">` with roving focus, so it works with screen readers.
 
 ## Persistence
 

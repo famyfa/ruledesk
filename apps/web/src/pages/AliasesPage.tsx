@@ -1,0 +1,227 @@
+import { Fragment, useMemo, useState } from "react";
+import { addAlias, aliasStatus, deleteAlias, findAliasReferences, isLocalId, updateAlias, type Alias } from "@ruledeck/core";
+import { useWorkspace } from "../workspace.tsx";
+import { AliasForm, RUNTIME_TYPES, type AliasDraft } from "../components/AliasForm.tsx";
+
+export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => void }) {
+  const { wc, edit, notify, validation } = useWorkspace();
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const aliases = useMemo(() => {
+    if (!wc) return [];
+    const q = query.toLowerCase();
+    return wc.current.aliases
+      .filter((a) => !typeFilter || a.type === typeFilter)
+      .filter((a) => !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.entries.some((e) => e.toLowerCase().includes(q)))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [wc, query, typeFilter]);
+
+  if (!wc) return null;
+  const types = wc.baseline.options.aliasTypes.filter((t) => t.value !== "internal");
+  const names = wc.current.aliases.map((a) => a.name);
+  const deletedAliases = wc.baseline.aliases.filter((b) => !wc.current.aliases.some((a) => a.id === b.id));
+
+  const save = (alias: Alias | null, draft: AliasDraft) => {
+    const ok = alias
+      ? edit((w) => updateAlias(w, alias.id, draft))
+      : edit((w) => addAlias(w, { ...draft, enabled: true, categories: [], extra: {} }).wc);
+    if (ok) {
+      notify("success", `Alias ${draft.name} ${alias ? "updated" : "created"} (staged).`);
+      setEditingId(null);
+    }
+  };
+
+  return (
+    <div className="aliases-page">
+      <div className="filter-bar">
+        <input type="search" placeholder="Search aliases, entries…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search aliases" />
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type filter">
+          <option value="">All types</option>
+          {types.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <span className="count">{aliases.length} aliases</span>
+        <button type="button" className="primary" onClick={() => setEditingId("new")}>
+          + New alias
+        </button>
+      </div>
+
+      {editingId === "new" && (
+        <div className="inline-panel">
+          <h3>New alias</h3>
+          <AliasForm
+            initial={{ name: "", type: "host", entries: [], description: "" }}
+            types={types}
+            existingNames={names}
+            submitLabel="Create alias"
+            onSave={(d) => save(null, d)}
+            onCancel={() => setEditingId(null)}
+          />
+        </div>
+      )}
+
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Entries</th>
+              <th>Description</th>
+              <th>Used by</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {aliases.map((a) => {
+              const status = aliasStatus(wc, a);
+              const refs = findAliasReferences(wc.current, a.name);
+              const issues = validation?.aliases[a.id];
+              const refCount = refs.rules.length + refs.aliases.length;
+              return (
+                <Fragment key={a.id}>
+                  <tr className={`row-${status}${issues ? " row-invalid" : ""}`}>
+                    <td>
+                      {issues ? (
+                        <span className="tag tag-invalid">⚠ ERR</span>
+                      ) : status === "added" ? (
+                        <span className="tag tag-added">+ NEW</span>
+                      ) : status === "modified" ? (
+                        <span className="tag tag-modified">● MOD</span>
+                      ) : null}
+                    </td>
+                    <td className="mono">
+                      <strong>{a.name}</strong>
+                      {!a.enabled && <span className="tag tag-off">off</span>}
+                    </td>
+                    <td>
+                      {types.find((t) => t.value === a.type)?.label ?? a.type}
+                      {RUNTIME_TYPES.has(a.type) && <span className="tag tag-runtime" title="Content resolved at runtime (table)">runtime</span>}
+                    </td>
+                    <td className="mono entries-cell" title={a.entries.join("\n")}>
+                      {a.entries.slice(0, 4).join(", ")}
+                      {a.entries.length > 4 && <span className="muted"> +{a.entries.length - 4}</span>}
+                    </td>
+                    <td>{a.description}</td>
+                    <td>
+                      {refCount === 0 ? (
+                        <span className="muted">unused</span>
+                      ) : (
+                        <details>
+                          <summary>
+                            {refs.rules.length} rule{refs.rules.length === 1 ? "" : "s"}
+                            {refs.aliases.length > 0 && `, ${refs.aliases.length} alias${refs.aliases.length === 1 ? "" : "es"}`}
+                          </summary>
+                          <ul className="ref-list">
+                            {refs.rules.map((r) => (
+                              <li key={r.ruleId}>
+                                <button type="button" className="link-button" onClick={() => onShowRule(r.ruleId)}>
+                                  {r.ruleLabel}
+                                </button>{" "}
+                                <span className="muted">({r.fields.join(", ")})</span>
+                              </li>
+                            ))}
+                            {refs.aliases.map((n) => (
+                              <li key={n}>alias {n}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </td>
+                    <td className="row-actions">
+                      <button type="button" onClick={() => setEditingId(editingId === a.id ? null : a.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="danger" onClick={() => setConfirmDelete(a.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  {issues && (
+                    <tr className="row-issues">
+                      <td />
+                      <td colSpan={6} className="text-error">
+                        {Object.values(issues).flat().join(" · ")}
+                      </td>
+                    </tr>
+                  )}
+                  {confirmDelete === a.id && (
+                    <tr className="row-confirm">
+                      <td />
+                      <td colSpan={6}>
+                        {refCount > 0 ? (
+                          <p className="text-warn">
+                            ⚠ {a.name} is used by {refs.rules.length} rule(s){refs.aliases.length ? ` and ${refs.aliases.length} alias(es)` : ""}. Deleting it leaves those
+                            rules pointing at a missing alias; they will show errors and can't be applied until you fix them. The rules will
+                            <strong> not</strong> turn into "any".
+                          </p>
+                        ) : (
+                          <p>Delete alias {a.name}? This is staged locally and can be undone.</p>
+                        )}
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => {
+                            if (edit((w) => deleteAlias(w, a.id, { acknowledgeReferences: true }))) notify("info", `Alias ${a.name} deleted (staged).`);
+                            setConfirmDelete(null);
+                          }}
+                        >
+                          {refCount > 0 ? "I understand, delete anyway" : "Delete"}
+                        </button>{" "}
+                        <button type="button" onClick={() => setConfirmDelete(null)}>
+                          Cancel
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  {editingId === a.id && (
+                    <tr>
+                      <td />
+                      <td colSpan={6}>
+                        <div className="inline-panel">
+                          <AliasForm
+                            initial={{ name: a.name, type: a.type, entries: a.entries, description: a.description }}
+                            types={types}
+                            existingNames={names}
+                            ownName={a.name}
+                            submitLabel="Save alias"
+                            referenceNote={refs.rules.length ? `Used by ${refs.rules.length} rule(s). Renaming updates them.` : undefined}
+                            onSave={(d) => save(a, d)}
+                            onCancel={() => setEditingId(null)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+            {deletedAliases.map((a) => (
+              <tr key={a.id} className="row-deleted">
+                <td>
+                  <span className="tag tag-deleted">− DEL</span>
+                </td>
+                <td className="mono">
+                  <s>{a.name}</s>
+                </td>
+                <td>{a.type}</td>
+                <td className="mono">{a.entries.slice(0, 4).join(", ")}</td>
+                <td>{a.description}</td>
+                <td colSpan={2} className="muted">
+                  Deleted (staged){isLocalId(a.id) ? "" : " · undo with Ctrl+Z"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

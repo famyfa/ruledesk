@@ -6,8 +6,8 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 ## 0. Repo setup
 - [x] Init git repo, point `origin` at github.com/famyfa/ruledesk
 - [x] Monorepo scaffold (npm workspaces, TypeScript, lint/test tooling)
-- [ ] `.gitignore`, `README.md`, `PROJECT.md`, `CLAUDE.md`
-- [ ] First commit + push
+- [x] `.gitignore`, `README.md`, `PROJECT.md`, `CLAUDE.md`
+- [x] First commit + push
 
 ## 1. Discovery & planning (spec §15)
 - [x] Architecture proposal — `docs/architecture.md`
@@ -15,7 +15,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Field mapping: OPNsense rule/alias ↔ domain model — `docs/field-mapping.md`
 - [x] Threat model (credentials, sessions, privileged ops) — `docs/security.md`
 - [x] Mock API specification — `docs/mock-api.md`
-- [ ] Executable acceptance tests for inline alias creation + rule editing
+- [x] Executable acceptance tests for inline alias creation + rule editing
 - [x] Unresolved API questions & compatibility risks — `docs/open-questions.md`
 - [x] Grid library choice documented (keyboard, clipboard, virtualization, a11y, license)
 
@@ -27,35 +27,35 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Normalization/serialization unit tests
 - [x] Version detection at connect time + feature flags per version
 - [x] Mock OPNsense API server (success, validation errors, conflicts, timeouts, partial failures, unsupported endpoints)
-- [ ] `apps/server`: Fastify backend, config from env, secrets never sent to browser
-- [ ] Authentication for the RuleDeck UI (session cookie, CSRF protection)
-- [ ] Firewall connection config (env-injected; no arbitrary URL fetching)
-- [ ] Read-only endpoints: rules, aliases, interfaces, selection options
+- [x] `apps/server`: Fastify backend, config from env, secrets never sent to browser
+- [x] Authentication for the RuleDeck UI (session cookie, CSRF protection)
+- [x] Firewall connection config (env-injected; no arbitrary URL fetching)
+- [x] Read-only endpoints: rules, aliases, interfaces, selection options
 - [x] Basic error handling + API error mapping (with tests)
-- [ ] Local dev environment (`npm run dev` runs mock + server + web)
+- [x] Local dev environment (`npm run dev` runs mock + server + web)
 
 ## 3. Phase 2 — Spreadsheet rule editor (smallest working version)
-- [ ] `apps/web`: React + TS + Vite shell (sidebar, toolbar, grid area, details panel, drawer)
-- [ ] Dark/light theme, dense table styling, visible focus
-- [ ] Read-only rule grid in real firewall order (sticky header + id columns)
-- [ ] Filtering and search
+- [x] `apps/web`: React + TS + Vite shell (sidebar, toolbar, grid area, details panel, drawer)
+- [x] Dark/light theme, dense table styling, visible focus
+- [x] Read-only rule grid in real firewall order (sticky header + id columns)
+- [x] Filtering and search
 - [x] Local working copy store (no writes to firewall)
-- [ ] Inline cell editing (click/Enter/Escape/Tab/Shift+Tab, arrow keys)
-- [ ] Modified / invalid / unchanged cell indicators
+- [x] Inline cell editing (click/Enter/Escape/Tab/Shift+Tab, arrow keys)
+- [x] Modified / invalid / unchanged cell indicators
 - [x] Undo / redo (with unit tests)
-- [ ] Rule cloning (placed after original, marked pending add)
+- [x] Rule cloning (placed after original, marked pending add)
 - [x] Diff generation in admin-readable form (with unit tests)
-- [ ] Pending-changes count + diff preview drawer
+- [x] Pending-changes count + diff preview drawer
 
 ## 4. Phase 3 — Alias-first workflow (signature feature)
-- [ ] Alias autocomplete in source/destination cells (shows object type)
-- [ ] "Create alias" inline popover (name, type, entries, description)
-- [ ] Alias validation (name, duplicates, malformed entries, pasted newline lists)
-- [ ] New alias immediately usable in the working copy
-- [ ] Edit alias inline without leaving the rule
-- [ ] Reference tracking; block deletion of referenced aliases unless acknowledged
-- [ ] Alias management page
-- [ ] Alias types discovered from API, not hard-coded
+- [x] Alias autocomplete in source/destination cells (shows object type)
+- [x] "Create alias" inline popover (name, type, entries, description)
+- [x] Alias validation (name, duplicates, malformed entries, pasted newline lists)
+- [x] New alias immediately usable in the working copy
+- [x] Edit alias inline without leaving the rule
+- [x] Reference tracking; block deletion of referenced aliases unless acknowledged
+- [x] Alias management page
+- [x] Alias types discovered from API, not hard-coded
 
 ## 5. Phase 4 — Safe deployment
 - [ ] Validate all pending changes before apply
@@ -66,8 +66,8 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [ ] Read back + verify result; staged vs written vs active states shown
 - [ ] Audit log (who, what, outcome; no secrets) in a small DB
 - [ ] Recovery guidance after partial failures
-- [ ] Rule reordering (drag-and-drop + keyboard), within supported groups only
-- [ ] Bulk editing (action, logging, enable/disable, description) with per-row validation
+- [x] Rule reordering (drag-and-drop + keyboard), within supported groups only
+- [x] Bulk editing (action, logging, enable/disable, description) with per-row validation
 
 ## 6. Phase 5 — Quality & packaging
 - [ ] E2E test: the full "add rule → inline alias → review → apply → reload" flow
