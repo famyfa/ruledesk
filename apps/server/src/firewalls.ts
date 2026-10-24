@@ -1,4 +1,5 @@
-import type { FirewallInfo, FirewallSnapshot } from "@ruledeck/core";
+import type { FirewallInfo, FirewallSnapshot, WorkingCopy } from "@ruledeck/core";
+import { runApply, type ApplyResult } from "./apply.ts";
 import { featuresFor, OpnsenseClient, OpnsenseError } from "@ruledeck/opnsense-client";
 import type { FirewallConfig } from "./config.ts";
 
@@ -10,6 +11,7 @@ export type ConnectionState =
 /** Holds one client per configured firewall. Secrets stay in here. */
 export class FirewallRegistry {
   private clients = new Map<string, { cfg: FirewallConfig; client: OpnsenseClient; state: ConnectionState }>();
+  private applying = new Set<string>();
 
   constructor(configs: FirewallConfig[]) {
     for (const cfg of configs) {
@@ -63,6 +65,28 @@ export class FirewallRegistry {
     const e = this.entry(id);
     const res = await e.client.readAll();
     return { firewallId: id, loadedAt: new Date().toISOString(), ...res };
+  }
+
+  /** Current connection state (connects first if unknown). */
+  async ensureConnected(id: string): Promise<ConnectionState> {
+    const e = this.entry(id);
+    return e.state.status === "connected" ? e.state : this.connect(id);
+  }
+
+  isApplying(id: string) {
+    return this.applying.has(id);
+  }
+
+  /** Run the apply pipeline. Only one apply per firewall at a time. */
+  async apply(id: string, wc: WorkingCopy, opts: { acknowledgeRisks: boolean }): Promise<ApplyResult> {
+    const e = this.entry(id);
+    if (this.applying.has(id)) throw new OpnsenseError("rejected", "Another apply is already running for this firewall.");
+    this.applying.add(id);
+    try {
+      return await runApply(e.client, wc, opts);
+    } finally {
+      this.applying.delete(id);
+    }
   }
 
   async close() {

@@ -2,6 +2,8 @@ import type { Alias, FirewallRule, InterfaceInfo, SelectionOptions } from "@rule
 import { OpnsenseError } from "./errors.ts";
 import { OpnsenseHttp, type ConnectionConfig } from "./http.ts";
 import {
+  SaveResponse,
+  StatusResponse,
   FirmwareInfo,
   GetItemResponse,
   InterfaceList,
@@ -30,6 +32,15 @@ export const EP = {
   portOptions: "firewall/filter/list_port_select_options",
   searchAlias: "firewall/alias/search_item",
   getAlias: "firewall/alias/get_item",
+  // Writes (verified against 26.1.11 / 26.7.7 source, see docs/api-compatibility.md)
+  addRule: "firewall/filter/add_rule",
+  setRule: "firewall/filter/set_rule",
+  delRule: "firewall/filter/del_rule",
+  applyFilter: "firewall/filter/apply",
+  addAlias: "firewall/alias/add_item",
+  setAlias: "firewall/alias/set_item",
+  delAlias: "firewall/alias/del_item",
+  reconfigureAliases: "firewall/alias/reconfigure",
 } as const;
 
 const PAGE = 500;
@@ -42,8 +53,8 @@ export interface ReadResult {
 }
 
 /**
- * Typed, read-only OPNsense client. Write operations are added in Phase 4
- * once each endpoint has been verified against a live instance.
+ * Typed OPNsense client. Every call goes to a fixed endpoint from `EP`.
+ * Write methods send only the fields given; callers decide what changed.
  */
 export class OpnsenseClient {
   readonly http: OpnsenseHttp;
@@ -156,5 +167,56 @@ export class OpnsenseClient {
       options: { interfaces, aliasTypes, protocols, wellKnownPorts },
       fingerprints,
     };
+  }
+
+  // ------------------------------------------------------------------ writes
+
+  private async save(endpoint: string, key: "rule" | "alias", body: FlatRecord, params: string[] = []): Promise<string | undefined> {
+    const res = parseOrThrow(SaveResponse, await this.http.post(endpoint, { params, body: { [key]: body } }), endpoint);
+    if (res.result !== "saved") throw new OpnsenseError("rejected", `The firewall did not save the ${key} (result: ${res.result}).`, { endpoint });
+    return res.uuid;
+  }
+
+  private async remove(endpoint: string, uuid: string): Promise<void> {
+    const res = parseOrThrow(SaveResponse, await this.http.post(endpoint, { params: [uuid] }), endpoint);
+    if (res.result !== "deleted") throw new OpnsenseError("rejected", `The firewall did not delete the object (result: ${res.result}).`, { endpoint });
+  }
+
+  async addRule(fields: FlatRecord): Promise<string> {
+    const uuid = await this.save(EP.addRule, "rule", fields);
+    if (!uuid) throw new OpnsenseError("protocol", "add_rule returned no uuid.", { endpoint: EP.addRule });
+    return uuid;
+  }
+
+  async setRule(uuid: string, fields: FlatRecord): Promise<void> {
+    await this.save(EP.setRule, "rule", fields, [uuid]);
+  }
+
+  async deleteRule(uuid: string): Promise<void> {
+    await this.remove(EP.delRule, uuid);
+  }
+
+  async addAlias(fields: FlatRecord): Promise<string> {
+    const uuid = await this.save(EP.addAlias, "alias", fields);
+    if (!uuid) throw new OpnsenseError("protocol", "add_item returned no uuid.", { endpoint: EP.addAlias });
+    return uuid;
+  }
+
+  async setAlias(uuid: string, fields: FlatRecord): Promise<void> {
+    await this.save(EP.setAlias, "alias", fields, [uuid]);
+  }
+
+  async deleteAlias(uuid: string): Promise<void> {
+    await this.remove(EP.delAlias, uuid);
+  }
+
+  /** Reload filter rules. Returns the raw configd status text. */
+  async applyFilter(): Promise<string> {
+    return parseOrThrow(StatusResponse, await this.http.post(EP.applyFilter), EP.applyFilter).status;
+  }
+
+  /** Reload alias tables (needed after alias changes). */
+  async reconfigureAliases(): Promise<string> {
+    return parseOrThrow(StatusResponse, await this.http.post(EP.reconfigureAliases), EP.reconfigureAliases).status;
   }
 }

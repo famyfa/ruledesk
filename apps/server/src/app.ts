@@ -9,6 +9,7 @@ import type { AppConfig } from "./config.ts";
 import { RateLimiter, safeEqual, SessionStore, verifyPassword, type Session } from "./auth.ts";
 import { AuditLog } from "./audit.ts";
 import { FirewallRegistry } from "./firewalls.ts";
+import { ApplyRequestSchema } from "./schemas.ts";
 
 export const SESSION_COOKIE = "ruledeck_session";
 export const CSRF_HEADER = "x-csrf-token";
@@ -39,6 +40,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const registry = deps.registry ?? new FirewallRegistry(config.firewalls);
   const sessions = deps.sessions ?? new SessionStore();
   const loginLimiter = new RateLimiter(5, 60_000);
+  const applyLimiter = new RateLimiter(config.applyRateLimit ?? 10, 60_000);
 
   const app = Fastify({
     logger:
@@ -107,7 +109,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/api/health", async () => ({ status: "ok" }));
 
   app.post("/api/auth/login", async (req, reply) => {
-    if (!loginLimiter.take(req.ip)) {
+    // Only failed attempts count towards the limit.
+    if (loginLimiter.isLimited(req.ip)) {
       return reply.code(429).send({ error: { kind: "rate_limited", message: "Too many login attempts. Try again in a minute." } });
     }
     const body = LoginBody.safeParse(req.body);
@@ -115,6 +118,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const userOk = safeEqual(body.data.username, config.adminUser);
     const pwOk = await verifyPassword(body.data.password, config.adminPasswordHash);
     if (!userOk || !pwOk) {
+      loginLimiter.take(req.ip);
       audit.record({ user: body.data.username.slice(0, 64), action: "auth.login", firewallId: null, outcome: "failure", details: { ip: req.ip } });
       return reply.code(401).send({ error: { kind: "invalid_credentials", message: "Wrong username or password." } });
     }
@@ -158,6 +162,58 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const id = firewallId(req, reply);
     if (!id) return;
     return { snapshot: await registry.snapshot(id) };
+  });
+
+  app.post("/api/firewalls/:id/apply", { bodyLimit: 16 * 1024 * 1024 }, async (req, reply) => {
+    const id = firewallId(req, reply);
+    if (!id) return;
+    const user = req.session!.user;
+    if (!applyLimiter.take(user)) {
+      return reply.code(429).send({ error: { kind: "rate_limited", message: "Too many apply attempts. Wait a minute." } });
+    }
+    if (!config.allowWrites) {
+      return reply.code(403).send({
+        error: { kind: "writes_disabled", message: "Sending changes to firewalls is disabled on this server (RULEDECK_ALLOW_WRITES is not true)." },
+      });
+    }
+    const body = ApplyRequestSchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: { kind: "bad_request", message: "Invalid change set: " + body.error.issues.slice(0, 3).map((i) => `${i.path.join(".")} ${i.message}`).join("; ") } });
+    }
+    if (body.data.baseline.firewallId !== id) {
+      return reply.code(400).send({ error: { kind: "bad_request", message: "The changes were made for a different firewall." } });
+    }
+    const conn = await registry.ensureConnected(id);
+    if (conn.status !== "connected") return reply.code(502).send({ error: { kind: "network", message: "The firewall is not reachable." } });
+    const f = conn.info.features;
+    if (!f.rulesWrite || !f.aliasesWrite) {
+      return reply.code(403).send({ error: { kind: "unsupported", message: f.notes[0] ?? "Editing is not supported for this firewall version." } });
+    }
+
+    const wc = { baseline: body.data.baseline, current: body.data.current, past: [], future: [] };
+    let result;
+    try {
+      result = await registry.apply(id, wc, { acknowledgeRisks: body.data.acknowledgeRisks });
+    } catch (err) {
+      audit.record({ user, action: "firewall.apply", firewallId: id, outcome: "failure", details: { error: err instanceof Error ? err.message : "error" } });
+      throw err;
+    }
+    audit.record({
+      user,
+      action: "firewall.apply",
+      firewallId: id,
+      outcome: result.outcome === "success" ? "success" : result.state.written > 0 ? "partial" : "failure",
+      details: {
+        outcome: result.outcome,
+        writes: `${result.state.written}/${result.state.totalWrites}`,
+        activated: result.state.activated,
+        verified: result.state.verified,
+        conflicts: result.conflicts?.length ?? 0,
+        steps: result.steps.map((s) => `${s.status}: ${s.label}`),
+        problems: result.verificationProblems,
+      },
+    });
+    return { result };
   });
 
   app.get("/api/audit", async () => ({ events: audit.list() }));

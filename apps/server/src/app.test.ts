@@ -24,6 +24,7 @@ beforeAll(async () => {
     adminUser: "admin",
     adminPasswordHash: await hashPassword("correct horse battery"),
     cookieSecure: false,
+    allowWrites: true,
     firewalls: [{ id: "default", name: "Mock", baseUrl: `http://127.0.0.1:${addr.port}`, apiKey: "k1", apiSecret: SECRET, timeoutMs: 5000 }],
   };
   audit = new AuditLog(":memory:");
@@ -67,6 +68,10 @@ describe("authentication", () => {
     for (let i = 0; i < 7; i++) codes.push((await login("nope nope nope", "10.9.9.9")).res.statusCode);
     expect(codes.slice(0, 5).every((c) => c === 401)).toBe(true);
     expect(codes.slice(5)).toEqual([429, 429]);
+  });
+
+  it("does not count successful logins towards the limit", async () => {
+    for (let i = 0; i < 8; i++) expect((await login(undefined, "10.8.8.8")).res.statusCode).toBe(200);
   });
 
   it("requires the CSRF token on state-changing requests", async () => {

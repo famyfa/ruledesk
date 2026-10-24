@@ -4,3 +4,6 @@ export * from "./address.ts";
 export * from "./working-copy.ts";
 export * from "./diff.ts";
 export * from "./rule-validation.ts";
+export * from "./ordering.ts";
+export * from "./rebase.ts";
+export * from "./risk.ts";

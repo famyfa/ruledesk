@@ -29,8 +29,10 @@ RuleDeck holds credentials that can rewrite a firewall. Treat the RuleDeck host 
 | T7 | CSRF | `SameSite=Strict` plus a per-session CSRF token required in `X-CSRF-Token` on every non-GET request | Phase 1 |
 | T8 | Brute force login | Per-IP rate limit on login (5/min) | Phase 1 |
 | T9 | Accidental destructive change | Changes are staged locally. Apply needs explicit confirmation on a review screen. Deleting a referenced alias requires acknowledging the impact | Phase 3/4 |
-| T10 | Admin lockout | Review screen flags risky changes: block/reject rules on the management interface, disabling or deleting pass rules that reach `(self)`, changes to the anti-lockout area. Where the firewall supports it (26.1), apply uses the rollback timer | Phase 4 |
+| T10 | Admin lockout | Review screen flags risky changes (heuristics in `packages/core/src/risk.ts`): deleting/disabling/narrowing pass rules that reach the firewall itself, new block/reject rules that can hit management ports, block rules moved above management allow rules. Apply needs an extra acknowledgement for these. The server refuses to apply risky changes without it. The 26.1 rollback timer is not used yet | Phase 4 (done) |
 | T11 | Silent overwrite of someone else's change | Fingerprint-based conflict detection before apply. On conflict nothing is written | Phase 4 |
+| T14 | Accidental writes to a real firewall during development | `RULEDECK_ALLOW_WRITES` is off by default. The dev config turns it on only for the mock | Phase 4 |
+| T15 | Repeated or concurrent applies | One apply at a time per firewall. Apply is rate-limited per user (`RULEDECK_APPLY_RATE_LIMIT`, default 10/min) | Phase 4 |
 | T12 | Public exposure | Compose binds to `127.0.0.1` only. Docs explain how to put it behind a reverse proxy with TLS | Phase 5 |
 | T13 | Stored credentials theft (DB copy) | Credentials added via UI (Phase 5) are encrypted with AES-256-GCM. The key comes from `RULEDECK_MASTER_KEY` (env/secret manager), never stored next to the DB | Phase 5 |
 

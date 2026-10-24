@@ -75,6 +75,21 @@ Every MVC save creates a new config history entry. That is the recovery mechanis
 | `apply.rollbackTimer` | yes | yes | **no** |
 | `aliases.write` | untested | yes | yes |
 
+## How RuleDeck writes (Phase 4)
+
+| Step | Endpoint(s) | Notes |
+|---|---|---|
+| Conflict check | `search_rule`, `alias/search_item` | Fingerprints of touched objects plus the `(uuid, sequence)` list of every group being reordered must match the baseline |
+| 1. Aliases | `alias/add_item`, `alias/set_item` | Changed fields only. Renames happen here, so OPNsense rewrites references |
+| 2. Rules | `filter/add_rule`, `filter/set_rule` | Changed fields only, plus `sequence` when the order changes |
+| 3. Deletes | `filter/del_rule`, then `alias/del_item` | Rules first, so aliases are no longer referenced |
+| 4. Activate | `alias/reconfigure` (if aliases changed), `filter/apply` | Status must start with `OK` |
+| 5. Verify | `search_rule`, `alias/search_item` | Every touched object and the order of reordered groups are compared |
+
+**Ordering is written through the `sequence` field (`set_rule`), not `move_rule_before`.** Order is defined as `prio_group` + `sequence`, and `sequence` is a normal writable model field. Writing it directly is deterministic, idempotent and needs one call per moved rule. `move_rule_before` renumbers neighbours in ways that depend on gaps. RuleDeck keeps the longest already-ordered run of rules unchanged and only renumbers the rest (`planOrdering` in `packages/core/src/ordering.ts`).
+
+The 26.1 rollback timer (`savepoint` / `apply/{revision}`) is **not used yet**. Recovery on both versions relies on config history (every save creates a revision).
+
 ## Known limitations
 
 - Legacy rules (Firewall ▸ Rules [legacy]) and automatic rules are read-only in RuleDeck.

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MutableRefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MutableRefObject } from "react";
 import {
   addAlias,
   addressItemToken,
@@ -49,7 +49,7 @@ export function TextEditor({ value, onCommit, onCancel, commitHandle, initialTex
   const [text, setText] = useState(initialText ?? value);
   const ref = useRef<HTMLInputElement>(null);
   commitHandle.current = () => onCommit(text, "none");
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.focus();
@@ -92,7 +92,7 @@ export function SelectEditor({
   const [v, setV] = useState(value);
   const ref = useRef<HTMLSelectElement>(null);
   commitHandle.current = () => onCommit(v, "none");
-  useEffect(() => ref.current?.focus(), []);
+  useLayoutEffect(() => ref.current?.focus(), []);
   const opts = options.some((o) => o.value === value) ? options : [{ value, label: value }, ...options];
   return (
     <select
@@ -276,17 +276,18 @@ export function AddressEditor({ value, onCommit, onCancel, commitHandle, initial
 
   const aliasDialog = useAliasDialog(
     "address",
-    (name) => {
-      addItem({ kind: "alias", name });
-      setTimeout(() => inputRef.current?.focus(), 0);
-    },
+    (name) => addItem({ kind: "alias", name }),
     (from, to) => setSpec((s) => ({ ...s, items: s.items.map((i) => (i.kind === "alias" && i.name === from ? { ...i, name: to } : i)) })),
   );
 
   const suggestions = useMemo(() => addressSuggestions(query, ctx, spec), [query, ctx, spec]);
+  // When the alias popover closes, put focus straight back into the picker.
+  useLayoutEffect(() => {
+    if (!aliasDialog.dialog) inputRef.current?.focus();
+  }, [aliasDialog.dialog]);
   commitHandle.current = aliasDialog.dialog ? null : () => onCommit(specRef.current, "none");
 
-  useEffect(() => inputRef.current?.focus(), []);
+  useLayoutEffect(() => inputRef.current?.focus(), []);
 
   const pick = (s: Suggestion) => {
     if (s.kind === "create") {
@@ -467,7 +468,7 @@ export function PortEditor({ value, onCommit, onCancel, commitHandle, initialTex
     if (r) onCommit(r, "none");
     else onCancel();
   };
-  useEffect(() => inputRef.current?.focus(), []);
+  useLayoutEffect(() => inputRef.current?.focus(), []);
 
   const pick = (s: Suggestion, move: MoveAfterCommit) => {
     if (s.kind === "create") aliasDialog.setDialog({ mode: "create", name: s.createName ?? "" });
@@ -535,7 +536,7 @@ export function InterfacesEditor({ value, onCommit, onCancel, commitHandle, ctx 
   const ref = useRef<HTMLUListElement>(null);
   const items = ctx.options.interfaces.filter((i) => i.kind === "interface" || i.kind === "group");
   commitHandle.current = () => onCommit(sel, "none");
-  useEffect(() => ref.current?.focus(), []);
+  useLayoutEffect(() => ref.current?.focus(), []);
   const toggle = (key: string) => setSel((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]));
   return (
     <div className="picker">

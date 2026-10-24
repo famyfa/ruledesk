@@ -1,4 +1,4 @@
-import type { FirewallInfo, FirewallSnapshot } from "@ruledeck/core";
+import type { FieldChange, FirewallInfo, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
 
 export interface ApiErrorBody {
   kind: string;
@@ -34,6 +34,26 @@ export interface AuditEvent {
   firewallId: string | null;
   outcome: string;
   details: Record<string, unknown>;
+}
+
+export interface Conflict {
+  objectType: "rule" | "alias";
+  id: string;
+  label: string;
+  reason: "modified" | "deleted" | "name_taken" | "order_changed";
+  message: string;
+  fields?: FieldChange[];
+}
+
+export interface ApplyResult {
+  outcome: "conflict" | "invalid" | "risky" | "success" | "partial" | "failed" | "unverified";
+  conflicts?: Conflict[];
+  validation?: ValidationReport;
+  risks?: RiskWarning[];
+  steps: { label: string; kind: "write" | "activate" | "verify"; status: "done" | "failed" | "skipped"; error?: string }[];
+  state: { written: number; totalWrites: number; activated: boolean; verified: boolean };
+  verificationProblems?: string[];
+  recovery?: string[];
 }
 
 let csrfToken = "";
@@ -77,4 +97,11 @@ export const api = {
   connect: (id: string) => request<{ state: ConnectionState }>("POST", `/api/firewalls/${encodeURIComponent(id)}/connect`),
   snapshot: (id: string) => request<{ snapshot: FirewallSnapshot }>("GET", `/api/firewalls/${encodeURIComponent(id)}/snapshot`),
   audit: () => request<{ events: AuditEvent[] }>("GET", "/api/audit"),
+  apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
+    request<{ result: ApplyResult }>("POST", `/api/firewalls/${encodeURIComponent(id)}/apply`, {
+      baseline: wc.baseline,
+      current: wc.current,
+      confirm: true,
+      acknowledgeRisks,
+    }),
 };

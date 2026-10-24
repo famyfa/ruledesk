@@ -83,7 +83,13 @@ export class RateLimiter {
     private now: () => number = Date.now,
   ) {}
 
-  /** Returns true if the action is allowed. */
+  /** True if the key has used up its budget in the current window (does not count). */
+  isLimited(key: string): boolean {
+    const h = this.hits.get(key);
+    return !!h && this.now() - h.windowStart < this.windowMs && h.count >= this.limit;
+  }
+
+  /** Count one hit. Returns true if the action is allowed. */
   take(key: string): boolean {
     const t = this.now();
     const h = this.hits.get(key);

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   computeChangeSet,
   createWorkingCopy,
+  rebase,
   validateWorkingState,
   WorkingCopyError,
   type ChangeSet,
@@ -83,6 +84,8 @@ interface WorkspaceValue {
   dismiss: (id: number) => void;
   reload: (opts?: { discardLocal?: boolean }) => Promise<void>;
   checkForExternalChanges: () => Promise<void>;
+  /** Re-read the firewall and replay staged edits on top. Returns notes about anything dropped. */
+  rebaseOntoFirewall: () => Promise<string[] | null>;
 }
 
 const Ctx = createContext<WorkspaceValue | null>(null);
@@ -202,6 +205,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [firewallId, notify]);
 
+  const rebaseOntoFirewall = useCallback(async () => {
+    const cur = wcRef.current;
+    if (!firewallId || !cur) return null;
+    try {
+      const { snapshot } = await api.snapshot(firewallId);
+      const r = rebase(cur, snapshot);
+      wcRef.current = r.wc;
+      setWc(r.wc);
+      setExternalChanges([]);
+      setRestoredFrom(null);
+      return r.notes;
+    } catch (err) {
+      notify("error", err instanceof ApiError ? err.message : "Could not read the firewall.");
+      return null;
+    }
+  }, [firewallId, notify]);
+
   useEffect(() => {
     api
       .firewalls()
@@ -239,6 +259,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dismiss,
     reload,
     checkForExternalChanges,
+    rebaseOntoFirewall,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

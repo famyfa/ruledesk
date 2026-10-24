@@ -4,7 +4,7 @@ A spreadsheet-first, self-hosted UI for managing **OPNsense** firewall rules and
 
 Edit rules in one dense table, create aliases **inside the cell you're editing**, review a readable diff, and only then send anything to the firewall.
 
-> **Status: early development.** Reading, editing, inline alias creation, diff and local staging work against a mock OPNsense. **Applying changes to a real firewall is not implemented yet** (Phase 4). See [PROJECT.md](PROJECT.md) and [TASKS.md](TASKS.md).
+> **Status: early development.** Everything works end to end against the bundled mock OPNsense, including apply with conflict detection and read-back verification. **It has not been tested against a real OPNsense yet**, so writes are disabled by default (`RULEDECK_ALLOW_WRITES=false`). See [PROJECT.md](PROJECT.md) and [TASKS.md](TASKS.md).
 
 ## Features so far
 
@@ -16,6 +16,7 @@ Edit rules in one dense table, create aliases **inside the cell you're editing**
 - Bulk edit: action, enable/disable, logging, description prefix/suffix/replace
 - Modified, new, invalid and read-only rows are labelled with text, not only color
 - Everything is staged in a local working copy that survives reloads. Nothing is sent until you apply.
+- Apply: review screen with lockout warnings, explicit confirmation, conflict detection against changes made elsewhere, writes of only the changed fields, activation, read-back verification, and recovery steps if anything fails
 - Legacy and automatic rules are shown read-only. Unknown rule fields are preserved and editable in the details panel.
 - Dark and light themes
 
@@ -36,14 +37,14 @@ Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev**. This start
 | server | http://127.0.0.1:3000 | RuleDeck backend (holds the API credentials) |
 | web | http://127.0.0.1:5173 | UI (Vite dev server, proxies `/api`) |
 
-## Connecting a real OPNsense (read-only for now)
+## Connecting a real OPNsense
 
 1. In OPNsense, create a dedicated user with an API key and only the privileges listed in [docs/security.md](docs/security.md).
 2. Copy `.env.example` to `apps/server/.env` and fill in `OPNSENSE_URL`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`.
 3. Generate an admin password hash with `npm run hash-password` and put it in `RULEDECK_ADMIN_PASSWORD_HASH`.
 4. If the firewall uses a self-signed certificate, export its CA and set `OPNSENSE_CA_FILE`. TLS verification can't be turned off.
 
-**Don't point a development build at a production firewall.** Use a disposable test VM.
+Writes stay disabled until you set `RULEDECK_ALLOW_WRITES=true`. **Test against a disposable OPNsense VM first, never a production firewall.**
 
 ## Tests
 

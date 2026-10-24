@@ -1257,6 +1257,9 @@ input[aria-invalid="true"] {
   margin: 0;
   font-size: 20px;
 }
+.login .field-error {
+  margin: 0;
+}
 .login button {
   margin-top: 8px;
 }
@@ -1289,4 +1292,75 @@ input[aria-invalid="true"] {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* ---------------------------------------------------------------- apply */
+.apply-plan {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+  color: var(--text-muted);
+}
+.risk-box {
+  border: 1px solid var(--reject);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 10px 0;
+  background: var(--modified-bg);
+}
+.risk-box h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.apply-result {
+  margin: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-left-width: 5px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.apply-result h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.apply-result h3 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+}
+.tone-ok {
+  border-left-color: var(--pass);
+}
+.tone-warn {
+  border-left-color: var(--modified-fg);
+}
+.tone-error {
+  border-left-color: var(--block);
+}
+.step-list,
+.conflict-list,
+.recovery {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.step {
+  margin: 2px 0;
+}
+.step-skipped {
+  color: var(--text-muted);
+}
+.tag-step-done {
+  background: var(--added-bg);
+  color: var(--added-fg);
+}
+.tag-step-failed {
+  background: var(--deleted-bg);
+  color: var(--deleted-fg);
+}
+.tag-step-skipped {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.form-actions.left {
+  justify-content: flex-start;
 }

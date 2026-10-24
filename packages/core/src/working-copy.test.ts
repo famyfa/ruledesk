@@ -59,7 +59,7 @@ describe("working copy edits", () => {
     const { wc, id } = addRule(base(), { afterId: "r1" });
     expect(id).toBe("new:1");
     expect(wc.current.rules.map((r) => r.id).slice(0, 3)).toEqual(["r1", "new:1", "r2"]);
-    expect(wc.current.rules[1]?.prioGroup).toBe("400000.lan");
+    expect(wc.current.rules[1]?.prioGroup).toBe("400000");
   });
 
   it("clones a rule directly below the original with a new identity", () => {

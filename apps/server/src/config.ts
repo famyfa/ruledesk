@@ -11,6 +11,8 @@ const Env = z.object({
   RULEDECK_ADMIN_PASSWORD_HASH: z.string().optional(),
   RULEDECK_COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   RULEDECK_WEB_DIST: z.string().optional(),
+  RULEDECK_ALLOW_WRITES: z.enum(["true", "false"]).default("false"),
+  RULEDECK_APPLY_RATE_LIMIT: z.coerce.number().int().min(1).max(1000).default(10),
   OPNSENSE_NAME: z.string().default("OPNsense"),
   OPNSENSE_URL: z.string().optional(),
   OPNSENSE_API_KEY: z.string().optional(),
@@ -38,6 +40,10 @@ export interface AppConfig {
   adminPasswordHash: string;
   cookieSecure: boolean;
   webDist?: string;
+  /** Master switch for sending changes to firewalls. Off by default. */
+  allowWrites: boolean;
+  /** Max apply attempts per user per minute. */
+  applyRateLimit?: number;
   firewalls: FirewallConfig[];
 }
 
@@ -96,6 +102,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     adminPasswordHash: e.RULEDECK_ADMIN_PASSWORD_HASH,
     cookieSecure: e.RULEDECK_COOKIE_SECURE ? e.RULEDECK_COOKIE_SECURE === "true" : production,
     webDist: e.RULEDECK_WEB_DIST,
+    allowWrites: e.RULEDECK_ALLOW_WRITES === "true",
+    applyRateLimit: e.RULEDECK_APPLY_RATE_LIMIT,
     firewalls,
   };
 }

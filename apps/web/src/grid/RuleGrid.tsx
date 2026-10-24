@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { flushSync } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   addRule,
@@ -99,8 +100,13 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
 
   const activeRule = rows[cell.row];
 
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+
   const focusCell = useCallback(() => {
     requestAnimationFrame(() => {
+      // An editor may have opened since this was scheduled; never steal its focus.
+      if (editingRef.current) return;
       const el = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row}:${cell.col}"]`);
       el?.focus({ preventScroll: true });
     });
@@ -147,7 +153,9 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
       return;
     }
     if (col.editor === "none") return;
-    setEditing({ initialText });
+    // Mount the editor synchronously so the next keystroke already lands in it.
+    editingRef.current = { initialText };
+    flushSync(() => setEditing({ initialText }));
   };
 
   const commitEdit = (col: Column, value: unknown, move: MoveAfterCommit) => {

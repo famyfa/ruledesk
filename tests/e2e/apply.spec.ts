@@ -1,0 +1,109 @@
+import { expect, test } from "@playwright/test";
+import { cell, login, MOCK, mockState, resetMock } from "./helpers.ts";
+
+/**
+ * Full acceptance flow from the project book (§10), including apply,
+ * reload and verification against the (mock) firewall.
+ */
+test.describe("apply to firewall", () => {
+  test.beforeEach(async () => {
+    await resetMock();
+  });
+
+  test("add rule + inline alias → review → apply → reload → still linked", async ({ page }) => {
+    await login(page);
+
+    // Add a rule with a description and TCP.
+    await cell(page, "Allow web to DMZ", "description").click();
+    await page.getByRole("button", { name: "+ Add rule" }).click();
+    await page.keyboard.type("Allow HTTPS to web servers");
+    await page.keyboard.press("Enter");
+    const row = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
+    await row.locator("td.col-protocol").click();
+    await row.locator("td.col-protocol").click();
+    await page.getByRole("combobox", { name: "Choose value" }).selectOption("TCP");
+    await page.keyboard.press("Enter");
+
+    // Destination: create the alias inline with two network entries.
+    await row.locator("td.col-destination").click();
+    await page.keyboard.type("WEB_SERVERS");
+    await page.getByRole("option", { name: /Create alias "WEB_SERVERS"/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Create alias" });
+    await dialog.getByLabel("Entries").fill("192.168.1.10\n192.168.1.11");
+    await dialog.getByRole("button", { name: "Create & use" }).click();
+    await page.keyboard.press("Enter");
+    await row.locator("td.col-destinationPort").click();
+    await page.keyboard.type("443");
+    await page.keyboard.press("Enter");
+
+    // Review and apply.
+    await page.getByRole("button", { name: "Review & apply", exact: true }).click();
+    const review = page.getByRole("region", { name: /Apply to/ });
+    await expect(review).toContainText("2 to create");
+    const applyButton = review.getByRole("button", { name: /Apply 2 changes/ });
+    await expect(applyButton).toBeDisabled(); // needs explicit confirmation
+    await review.getByLabel("I reviewed the changes listed above.").check();
+    await applyButton.click();
+
+    await expect(page.getByText("Changes applied and verified on the firewall.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /0 pending/ })).toBeVisible();
+
+    // The (mock) firewall really has both, linked by name, and activated.
+    const state = await mockState();
+    const alias = state.aliases.find((a) => a.name === "WEB_SERVERS");
+    expect(alias?.content).toBe("192.168.1.10\n192.168.1.11");
+    const rule = state.rules.find((r) => r.description === "Allow HTTPS to web servers");
+    expect(rule?.destination_net).toBe("WEB_SERVERS");
+    expect(rule?.destination_port).toBe("443");
+    expect(state.pendingApply).toBe(false);
+
+    // Reload the app: rule and alias come from the firewall and are still linked.
+    await page.reload();
+    await page.getByRole("button", { name: "Firewall Rules" }).click();
+    await expect(page.getByRole("grid")).toBeVisible();
+    const reloaded = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
+    await expect(reloaded.locator("td.col-destination .chip-alias")).toHaveText(/WEB_SERVERS/);
+    await expect(reloaded.getByText("+ NEW")).toHaveCount(0);
+    await expect(reloaded.locator("td.col-destination .chip-alias")).toHaveAttribute("title", /192\.168\.1\.10/);
+
+    // The audit log recorded it.
+    await page.getByRole("button", { name: "Audit Log" }).click();
+    await expect(page.getByRole("cell", { name: "firewall.apply" }).first()).toBeVisible();
+  });
+
+  test("a change made elsewhere is detected and nothing is overwritten", async ({ page }) => {
+    await login(page);
+    const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
+    await row.locator("td.col-log").click(); // toggle logging on
+    await expect(row.locator("td.col-log")).toHaveClass(/cell-modified/);
+
+    // Another admin edits the same rule in the native UI.
+    const st = await mockState();
+    const uuid = st.rules.find((r) => r.description === "Block DMZ to LAN")!.uuid;
+    await fetch(`${MOCK}/__mock/external-edit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ uuid, fields: { description: "Block DMZ to LAN (by colleague)" } }),
+    });
+
+    await page.getByRole("button", { name: "Review & apply", exact: true }).click();
+    const review = page.getByRole("region", { name: /Apply to/ });
+    await review.getByLabel("I reviewed the changes listed above.").check();
+    await review.getByRole("button", { name: /Apply 1 change/ }).click();
+
+    const result = page.getByRole("region", { name: "Apply result" });
+    await expect(result).toContainText("the firewall changed since you loaded it");
+    await expect(result).toContainText("Block DMZ to LAN (by colleague)");
+    expect((await mockState()).rules.find((r) => r.uuid === uuid)!.log).toBe("0");
+
+    // Reconcile: keep my change on top of theirs, then apply.
+    await result.getByRole("button", { name: /Keep my changes/ }).click();
+    await expect(page.getByText(/Your staged changes now sit on top/)).toBeVisible();
+    await review.getByLabel("I reviewed the changes listed above.").check();
+    await review.getByRole("button", { name: /Apply 1 change/ }).click();
+    await expect(page.getByText("Changes applied and verified on the firewall.")).toBeVisible();
+    const final = (await mockState()).rules.find((r) => r.uuid === uuid)!;
+    expect(final.log).toBe("1");
+    expect(final.description).toBe("Block DMZ to LAN (by colleague)");
+  });
+});

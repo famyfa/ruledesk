@@ -34,9 +34,15 @@ Key findings that shaped the design:
 
 **Tested:** Playwright acceptance test for the full inline-alias workflow up to the diff, plus reload persistence.
 
-## Phase 4: Safe deployment (next)
+## Phase 4: Safe deployment (done, mock only)
 
-Not started: conflict detection at apply time, review screen with lockout warnings, writes (alias → rules → moves → apply), read-back verification, audit events for applies, recovery guidance.
+**Works:** review screen with counts, plan explanation and lockout warnings (with acknowledgement), explicit confirmation, server-side re-read and conflict detection (field-level for changed objects, plus a whole-group check before reordering), writes in a safe order with only changed fields, ordering through `sequence` with minimal renumbering, activation, read-back verification, per-step result with Written / Activated / Verified labels, recovery steps for every failure mode, a "keep my changes on top of the firewall" reconcile path, and audit events for every apply.
+
+**Safety switch:** writes are refused unless `RULEDECK_ALLOW_WRITES=true` (only set for the mock in development).
+
+**Tested:** 10 server tests against the mock (success, reorder/delete/update, conflicts by edit, reorder and name clash, partial write failure, activation failure, invalid data, risk acknowledgement, alias delete), 15 core tests for ordering/rebase/risk, and E2E tests for the full flow (add rule → inline alias → review → apply → reload → still linked) and the conflict/reconcile flow.
+
+**Not done:** nothing has been run against a real OPNsense yet. The 26.1 rollback timer is not used.
 
 ## Phase 5: Quality and packaging
 

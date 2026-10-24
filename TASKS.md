@@ -58,23 +58,23 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Alias types discovered from API, not hard-coded
 
 ## 5. Phase 4 — Safe deployment
-- [ ] Validate all pending changes before apply
-- [ ] Concurrent-modification detection (conflict view: discard / reconcile / recreate)
-- [ ] Review screen: adds, modifies, deletes, reorders; lockout-risk warnings
-- [ ] Explicit confirmation before apply
-- [ ] Apply via verified API calls (savepoint → apply → confirm where supported)
-- [ ] Read back + verify result; staged vs written vs active states shown
-- [ ] Audit log (who, what, outcome; no secrets) in a small DB
-- [ ] Recovery guidance after partial failures
+- [x] Validate all pending changes before apply
+- [x] Concurrent-modification detection (conflict view: discard / reconcile / recreate)
+- [x] Review screen: adds, modifies, deletes, reorders; lockout-risk warnings
+- [x] Explicit confirmation before apply
+- [x] Apply via verified API calls (writes → alias reconfigure → filter apply; 26.1 rollback timer not used yet)
+- [x] Read back + verify result; staged vs written vs active states shown
+- [x] Audit log (who, what, outcome; no secrets) in a small DB
+- [x] Recovery guidance after partial failures
 - [x] Rule reordering (drag-and-drop + keyboard), within supported groups only
 - [x] Bulk editing (action, logging, enable/disable, description) with per-row validation
 
 ## 6. Phase 5 — Quality & packaging
-- [ ] E2E test: the full "add rule → inline alias → review → apply → reload" flow
+- [x] E2E test: the full "add rule → inline alias → review → apply → reload" flow
 - [ ] Docker Compose deployment (no cloud deps, not exposed publicly by default)
 - [ ] Backup/restore of RuleDeck settings
 - [ ] Encrypted credential storage with documented key strategy
-- [ ] Rate limiting on sensitive routes
+- [x] Rate limiting on sensitive routes
 - [ ] Version compatibility checks against real OPNsense instances
 - [ ] Security review
 - [ ] Usability polish

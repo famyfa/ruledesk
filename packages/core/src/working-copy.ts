@@ -1,6 +1,7 @@
 import type { Alias, FirewallRule, FirewallSnapshot } from "./domain.ts";
 import { ANY_ADDRESS, ANY_PORT } from "./domain.ts";
 import { aliasNamesInAddress } from "./address.ts";
+import { derivePrioGroup, groupPrioMap, placeAtEndOfGroup } from "./ordering.ts";
 
 /**
  * The working copy: the baseline read from the firewall plus the user's local
@@ -95,10 +96,16 @@ export function updateRule(wc: WorkingCopy, id: string, patch: RulePatch): Worki
   const rule = findRule(wc.current, id);
   assertEditable(rule);
   const updated = { ...rule, ...patch };
-  return commit(wc, {
-    ...wc.current,
-    rules: wc.current.rules.map((r) => (r.id === id ? updated : r)),
-  });
+  let rules = wc.current.rules.map((r) => (r.id === id ? updated : r));
+  if ("interfaces" in patch || "interfaceNot" in patch) {
+    // Interfaces decide the priority group; OPNsense will move the rule there.
+    const group = derivePrioGroup(updated, wc.baseline.options.interfaces, groupPrioMap(wc.baseline));
+    if (group !== rule.prioGroup) {
+      updated.prioGroup = group;
+      rules = placeAtEndOfGroup(rules, updated);
+    }
+  }
+  return commit(wc, { ...wc.current, rules });
 }
 
 /** Apply the same patch to several rules (bulk edit). Read-only rules are rejected up front. */
@@ -153,8 +160,10 @@ export function addRule(
   const rule: FirewallRule = {
     ...newRuleTemplate(id, anchor?.prioGroup),
     interfaces: anchor ? [...anchor.interfaces] : [],
+    interfaceNot: anchor?.interfaceNot ?? false,
     ...opts.patch,
   };
+  if (!anchor) rule.prioGroup = derivePrioGroup(rule, wc.baseline.options.interfaces, groupPrioMap(wc.baseline));
   const next = commit(wc, {
     ...wc.current,
     rules: insertAfter(wc.current.rules, opts.afterId, rule),

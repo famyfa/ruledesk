@@ -2,7 +2,7 @@ import type { Alias, FirewallRule, FirewallSnapshot } from "./domain.ts";
 import { newRuleTemplate } from "./working-copy.ts";
 
 export function rule(id: string, patch: Partial<FirewallRule> = {}): FirewallRule {
-  return { ...newRuleTemplate(id, "400000.lan"), interfaces: ["lan"], ...patch };
+  return { ...newRuleTemplate(id, "400000"), interfaces: ["lan"], ...patch };
 }
 
 export function alias(id: string, name: string, patch: Partial<Alias> = {}): Alias {
