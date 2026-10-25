@@ -159,6 +159,9 @@ function lcs(a: string[], b: string[]): Set<string> {
 }
 
 export function computeChangeSet(wc: WorkingCopy): ChangeSet {
+  // Read-only rules (legacy/automatic) can't be edited, so they never produce changes.
+  const baselineRules = wc.baseline.rules.filter((r) => r.origin === "mvc");
+  const currentRules = wc.current.rules.filter((r) => r.origin === "mvc");
   const changes: Change[] = [];
   const baseAliases = new Map(wc.baseline.aliases.map((a) => [a.id, a]));
   const curAliasIds = new Set(wc.current.aliases.map((a) => a.id));
@@ -187,9 +190,9 @@ export function computeChangeSet(wc: WorkingCopy): ChangeSet {
     if (!curAliasIds.has(a.id)) changes.push({ kind: "delete", objectType: "alias", id: a.id, label: a.name, fields: [] });
   }
 
-  const baseRules = new Map(wc.baseline.rules.map((r) => [r.id, r]));
-  const curRuleIds = new Set(wc.current.rules.map((r) => r.id));
-  for (const r of wc.current.rules) {
+  const baseRules = new Map(baselineRules.map((r) => [r.id, r]));
+  const curRuleIds = new Set(currentRules.map((r) => r.id));
+  for (const r of currentRules) {
     const base = baseRules.get(r.id);
     if (!base) {
       changes.push({ kind: "create", objectType: "rule", id: r.id, label: ruleLabel(r, wc.current), fields: ruleCreateFields(r) });
@@ -198,13 +201,14 @@ export function computeChangeSet(wc: WorkingCopy): ChangeSet {
       if (fields.length) changes.push({ kind: "modify", objectType: "rule", id: r.id, label: ruleLabel(r, wc.current), fields });
     }
   }
-  for (const r of wc.baseline.rules) {
+  for (const r of baselineRules) {
     if (!curRuleIds.has(r.id)) {
       changes.push({ kind: "delete", objectType: "rule", id: r.id, label: ruleLabel(r, wc.baseline), fields: [] });
     }
   }
-  for (const id of reorderedRuleIds(wc.baseline.rules, wc.current.rules)) {
-    const r = wc.current.rules.find((x) => x.id === id)!;
+  for (const id of reorderedRuleIds(baselineRules, currentRules)) {
+    const r = currentRules.find((x) => x.id === id)!;
+    // Positions as shown in the grid (all rules, including read-only ones).
     const before = wc.baseline.rules.findIndex((x) => x.id === id) + 1;
     const after = wc.current.rules.findIndex((x) => x.id === id) + 1;
     changes.push({
@@ -224,6 +228,7 @@ export function computeChangeSet(wc: WorkingCopy): ChangeSet {
 export type ChangeStatus = "unchanged" | "added" | "modified";
 
 export function ruleStatus(wc: WorkingCopy, rule: FirewallRule): ChangeStatus {
+  if (rule.origin !== "mvc") return "unchanged";
   const base = wc.baseline.rules.find((r) => r.id === rule.id);
   if (!base) return "added";
   if (base === rule) return "unchanged";
@@ -232,6 +237,7 @@ export function ruleStatus(wc: WorkingCopy, rule: FirewallRule): ChangeStatus {
 
 /** Set of field keys that differ from the baseline (for cell highlighting). */
 export function changedRuleFields(wc: WorkingCopy, rule: FirewallRule): Set<string> {
+  if (rule.origin !== "mvc") return new Set();
   const base = wc.baseline.rules.find((r) => r.id === rule.id);
   if (!base || base === rule) return new Set();
   return new Set(ruleFieldChanges(base, rule).map((f) => f.field));

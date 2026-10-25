@@ -89,3 +89,18 @@ describe("change sets", () => {
     expect(computeChangeSet(wc).changes).toEqual([]);
   });
 });
+
+describe("read-only rules never produce changes", () => {
+  it("ignores legacy/automatic rules even when several share one id (the 'phantom changes' bug)", () => {
+    // Real firewalls list many automatic rules under the same reference label.
+    const auto = (port: string) => rule("legacy:system", { origin: "legacy", description: "anti-lockout rule", destinationPort: { kind: "literal", value: port } });
+    const wc = createWorkingCopy(snapshot([rule("r1"), auto("443"), auto("80"), auto("22")]));
+    expect(computeChangeSet(wc).changes).toEqual([]);
+    expect(ruleStatus(wc, wc.current.rules[2]!)).toBe("unchanged");
+  });
+
+  it("still detects real edits next to read-only rules", () => {
+    const wc = updateRule(createWorkingCopy(snapshot([rule("r1"), rule("legacy:x", { origin: "legacy" })])), "r1", { log: true });
+    expect(computeChangeSet(wc).changes.map((c) => c.id)).toEqual(["r1"]);
+  });
+});

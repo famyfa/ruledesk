@@ -69,7 +69,9 @@ const MAPPED_RULE_KEYS = new Set([
 
 export function ruleFromRecord(rec: FlatRecord, ctx: AddressContext, index = 0): FirewallRule {
   const legacy = !rec.uuid || bool(rec.legacy);
-  const id = rec.uuid && !legacy ? rec.uuid : `legacy:${rec.ref || rec.uuid || `${index}:${rec.description ?? ""}`}`;
+  // Read-only rules (automatic/legacy) have no stable uuid. Their `uuid` is the pf label and `ref` a
+  // shared reference (many rules can share one), so ids are made unique by `uniqueRuleIds` afterwards.
+  const id = rec.uuid && !legacy ? rec.uuid : `legacy:${rec.uuid || rec.ref || `${index}:${rec.description ?? ""}`}`;
   const extra: Record<string, string> = {};
   for (const [k, v] of Object.entries(rec)) {
     if (!MAPPED_RULE_KEYS.has(k) && !RULE_VOLATILE.has(k)) extra[k] = v;
@@ -182,4 +184,19 @@ export function fingerprint(rec: FlatRecord, volatile: ReadonlySet<string>): str
   const h = createHash("sha256");
   for (const k of keys) h.update(`${k}\u0000${rec[k]}\u0001`);
   return h.digest("hex").slice(0, 32);
+}
+
+/**
+ * Make rule ids unique. Several read-only rules can carry the same label or
+ * reference; with shared ids, change detection would compare different rules
+ * with each other and report phantom modifications. Duplicates get a numbered
+ * suffix in the order the firewall lists them.
+ */
+export function uniqueRuleIds(rules: FirewallRule[]): FirewallRule[] {
+  const seen = new Map<string, number>();
+  return rules.map((r) => {
+    const n = seen.get(r.id) ?? 0;
+    seen.set(r.id, n + 1);
+    return n === 0 ? r : { ...r, id: `${r.id}#${n + 1}` };
+  });
 }

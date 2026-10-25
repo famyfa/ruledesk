@@ -20,6 +20,7 @@ import {
   flattenRecord,
   ruleFromRecord,
   RULE_VOLATILE,
+  uniqueRuleIds,
   type FlatRecord,
 } from "./adapter.ts";
 
@@ -192,7 +193,7 @@ export class OpnsenseClient {
       ...networkKeys.filter((k) => k !== "any" && k !== "(self)" && !k.endsWith("ip")),
     ]);
     const ctx = { interfaces: ifaceKeys, aliases: new Set(aliases.map((a) => a.name)) };
-    const rules = rawRules.map((r, i) => ruleFromRecord(r, ctx, i));
+    const rules = uniqueRuleIds(rawRules.map((r, i) => ruleFromRecord(r, ctx, i)));
     const fingerprints: Record<string, string> = {};
     rawRules.forEach((r, i) => (fingerprints[rules[i]!.id] = fingerprint(r, RULE_VOLATILE)));
     rawAliases.forEach((r, i) => (fingerprints[aliases[i]!.id] = fingerprint(r, ALIAS_VOLATILE)));

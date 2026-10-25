@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasFromRecord, aliasToRecord, fingerprint, flattenRecord, ruleChangedFields, ruleFromRecord, ruleToRecord, RULE_VOLATILE } from "./adapter.ts";
+import { aliasFromRecord, aliasToRecord, fingerprint, flattenRecord, ruleChangedFields, ruleFromRecord, ruleToRecord, RULE_VOLATILE, uniqueRuleIds } from "./adapter.ts";
 import { featuresFor, parseVersion } from "./version.ts";
 import { apiPath, validateBaseUrl } from "./http.ts";
 import { mapResponseError } from "./errors.ts";
@@ -160,5 +160,21 @@ describe("error mapping", () => {
     const v = mapResponseError(200, { result: "failed", validations: { "rule.action": "bad" } }, "x");
     expect(v?.kind).toBe("validation");
     expect(v?.details.validations).toEqual({ "rule.action": "bad" });
+  });
+});
+
+describe("ids of read-only rules", () => {
+  const ctx2 = { interfaces: new Set(["lan"]), aliases: new Set<string>() };
+  it("are unique even when the firewall gives several rules the same label or reference", () => {
+    const rows = ["443", "80", "22"].map((port, i) => ruleFromRecord({ legacy: "1", ref: "system/anti-lockout", description: "anti-lockout rule", destination_port: port, interface: "lan" }, ctx2, i));
+    expect(new Set(rows.map((r) => r.id)).size).toBe(1); // the raw ids collide ...
+    const fixed = uniqueRuleIds(rows);
+    expect(new Set(fixed.map((r) => r.id)).size).toBe(3); // ... and are made unique here
+    expect(fixed.map((r) => r.id)).toEqual(["legacy:system/anti-lockout", "legacy:system/anti-lockout#2", "legacy:system/anti-lockout#3"]);
+    expect(fixed.every((r) => r.origin === "legacy")).toBe(true);
+  });
+  it("prefer the pf label over the shared reference", () => {
+    const r = ruleFromRecord({ legacy: "1", uuid: "abc123", ref: "system/x", description: "d" }, ctx2, 0);
+    expect(r.id).toBe("legacy:abc123");
   });
 });

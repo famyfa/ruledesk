@@ -42,7 +42,7 @@ export interface RebaseResult {
  */
 export function rebase(wc: WorkingCopy, fresh: FirewallSnapshot): RebaseResult {
   const notes: string[] = [];
-  const oldBaseRules = new Map(wc.baseline.rules.map((r) => [r.id, r]));
+  const oldBaseRules = new Map(wc.baseline.rules.filter((r) => r.origin === "mvc").map((r) => [r.id, r]));
   const oldBaseAliases = new Map(wc.baseline.aliases.map((a) => [a.id, a]));
   const freshAliasNames = new Set(fresh.aliases.map((a) => a.name));
 
@@ -77,7 +77,7 @@ export function rebase(wc: WorkingCopy, fresh: FirewallSnapshot): RebaseResult {
   }
 
   // ---- rules: start from fresh order, then apply local edits/deletes, then insert local creations
-  const curById = new Map(wc.current.rules.map((r) => [r.id, r]));
+  const curById = new Map(wc.current.rules.filter((r) => r.origin === "mvc").map((r) => [r.id, r]));
   let rules: FirewallRule[] = [];
   for (const fr of fresh.rules) {
     const old = oldBaseRules.get(fr.id);

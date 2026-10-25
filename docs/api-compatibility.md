@@ -110,3 +110,11 @@ Two OPNsense HA pairs, signed in with GUI username/password. These are the first
 | Login page | Hidden CSRF field + session cookie | As expected (22-char key) | — |
 
 Shape errors now name the top-level fields that were received (never values), so further differences can be documented from the error text alone.
+
+### Automatic and legacy rules (found live, 2026-10-25)
+
+`filter/search_rule` also returns rules from `filter list non_mvc_rules` (anti-lockout, sshlockout, DHCP, RFC4890 ICMPv6, bogons, plugin rules). In these rows (source: `scripts/filter/list_non_mvc_rules.php`):
+
+- `uuid` is the pf **label**, not a config uuid; `ref` is a reference that **many rules share**; `legacy` is true.
+- They have no stable identity of their own. RuleDeck gives them ids `legacy:<label or ref>` and makes duplicates unique (`#2`, `#3`, ...) in listing order.
+- They are read-only and **excluded from change detection**. (Using the shared `ref` as an id once made RuleDeck compare different rules with each other and report phantom modifications.)

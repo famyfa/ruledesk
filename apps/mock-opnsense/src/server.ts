@@ -147,6 +147,24 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     auth.dnsRebind = Boolean((req.body as { on?: boolean } | undefined)?.on ?? true);
     return { status: "ok" };
   });
+  /** Add read-only (automatic/legacy) rules, e.g. several that share one `ref` like real firewalls do. */
+  app.post("/__mock/legacy-rules", async (req) => {
+    const rows = ((req.body ?? []) as RawRecord[]).map((r, i) => ({
+      legacy: "1",
+      enabled: "1",
+      action: "pass",
+      direction: "in",
+      ipprotocol: "inet",
+      protocol: "any",
+      source_net: "any",
+      destination_net: "any",
+      sort_order: `400000.1${String(2000 + i)}`,
+      prio_group: "400000",
+      ...r,
+    }));
+    state.legacyRules.push(...rows);
+    return { status: "ok", count: state.legacyRules.length };
+  });
   app.get("/__mock/history", async () => ({ history }));
   app.get("/__mock/state", async () => ({
     version: state.version,
