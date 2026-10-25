@@ -26,9 +26,11 @@ interface Filters {
   action: string;
   protocol: string;
   changedOnly: boolean;
+  /** Hide automatic/legacy rules that can't be edited. */
+  hideReadOnly: boolean;
 }
 
-const EMPTY: Filters = { text: "", iface: "", action: "", protocol: "", changedOnly: false };
+const EMPTY: Filters = { text: "", iface: "", action: "", protocol: "", changedOnly: false, hideReadOnly: true };
 
 export function RulesPage({ initialActiveId = null }: { initialActiveId?: string | null }) {
   const { wc, edit, sites, siteId } = useWorkspace();
@@ -60,6 +62,7 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
     if (!wc || !ctx) return [];
     const aliasIndex = indexAliases(wc.current.aliases);
     return wc.current.rules.filter((r) => {
+      if (filters.hideReadOnly && r.origin !== "mvc") return false;
       if (filters.iface === "__floating" && r.interfaces.length === 1 && !r.interfaceNot) return false;
       if (filters.iface && filters.iface !== "__floating" && r.interfaces.length > 0 && !r.interfaces.includes(filters.iface)) return false;
       if (filters.action && r.action !== filters.action) return false;
@@ -71,7 +74,7 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
   }, [wc, ctx, filters, filter]);
 
   if (!wc || !ctx) return null;
-  const activeFilters = Object.entries(filters).filter(([, v]) => v).length;
+  const activeFilters = Object.entries(filters).filter(([k, v]) => (k === "hideReadOnly" ? !v : v)).length;
 
   return (
     <div className="rules-page">
@@ -102,6 +105,10 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
             </option>
           ))}
         </select>
+        <label className="checkbox">
+          <input type="checkbox" checked={filters.hideReadOnly} onChange={(e) => setFilters({ ...filters, hideReadOnly: e.target.checked })} />
+          Hide default read-only rules
+        </label>
         <label className="checkbox">
           <input type="checkbox" checked={filters.changedOnly} onChange={(e) => setFilters({ ...filters, changedOnly: e.target.checked })} />
           Changed only

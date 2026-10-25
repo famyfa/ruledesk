@@ -21,6 +21,11 @@ test("automatic rules that share one reference don't show up as pending changes"
   });
   await login(page);
 
+  // Default read-only rules are hidden until asked for.
+  await expect(page.getByText("7 of 13 rules")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: /anti-lockout rule/ })).toHaveCount(0);
+  await page.getByLabel("Hide default read-only rules").uncheck();
+
   // Every automatic rule is listed (7 normal + 1 built-in + 5 added = 13), none is "modified".
   await expect(page.getByText("13 of 13 rules")).toBeVisible();
   await expect(page.getByRole("button", { name: /0 pending/ })).toBeVisible();
