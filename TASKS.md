@@ -139,3 +139,20 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [ ] Verify the sync and global views against the live lab (two HA sites)
 - [ ] Docs: operator notes for sync vs. shared policy (docs/multi-site.md)
 
+## 13. Graceful HA switch (new, 2026-10-25)
+- [ ] Research: which OPNsense API/endpoints show CARP status and enter/leave CARP maintenance mode in 26.7 (verify in the source, record in docs/api-compatibility.md, feature-flag by version)
+- [ ] Show HA state per site (primary/backup, CARP status per VIP, sync status) in Sites and the header
+- [ ] "Switch over" flow: pre-checks (peer healthy, config in sync, no pending sync) -> demote primary (maintenance mode) -> wait for the peer to take the VIPs -> read back both nodes -> offer "switch back"
+- [ ] RuleDeck follows the new primary: writes/log go to the node that is primary at that moment (check before every apply, as today)
+- [ ] Mock: CARP state and maintenance mode; tests (unit, integration, E2E)
+- [ ] Live test in the lab (planned window, one site first)
+
+## 14. Site configuration (new, 2026-10-25)
+- [ ] Scope decision: which services first (DHCP, certificates, DNS, NTP, interfaces/VLANs, gateways, users) and read-only first, then edit
+- [ ] Research per service: API controller/endpoints in 26.7 source (never guess), required privileges, apply/reconfigure step, record in docs/api-compatibility.md
+- [ ] Generic "settings page" model: read -> form -> change set -> apply -> read back (same safety rules as rules: conflict check, review, no auto rollback)
+- [ ] DHCP: ranges, static mappings (Kea / ISC depending on version), sync between sites where it makes sense
+- [ ] Certificates: list, expiry warnings across all sites, import/renew/assign (private keys must never be stored or logged)
+- [ ] Compare a setting across sites (like the Global rules view) and push it to another site
+- [ ] Tests with every service; docs
+
