@@ -21,7 +21,12 @@ export const SearchResponse = z
   .loose();
 export type SearchResponse = z.infer<typeof SearchResponse>;
 
-export const FirmwareInfo = z.object({ product_id: z.string(), product_version: z.string() }).loose();
+export const FirmwareInfo = z
+  .object({
+    product_version: z.string().optional(),
+    product: z.object({ product_version: z.string().optional() }).loose().optional(),
+  })
+  .loose();
 
 const LabelledItems = z.object({ label: z.string(), items: z.record(z.string(), z.string()).or(z.array(z.unknown())).optional() }).loose();
 export const NetworkSelectOptions = z.object({ aliases: LabelledItems, networks: LabelledItems }).loose();
@@ -30,13 +35,47 @@ export const PortSelectOptions = z.object({ aliases: LabelledItems, ports: Label
 const InterfaceItem = z.object({ value: z.string(), label: z.string(), type: z.string() }).loose();
 export const InterfaceList = z.record(z.string(), z.object({ label: z.string(), items: z.array(InterfaceItem) }).loose());
 
-export const GetItemResponse = (key: string) => z.object({ [key]: z.record(z.string(), RawFieldValue) }).loose();
+/**
+ * get_rule / get_item with no uuid: model defaults. Field shapes vary by field
+ * type and release (option maps, option groups, key/value stores), so only the
+ * outer structure is checked here; callers read the one field they need.
+ */
+export const GetItemResponse = (key: string) => z.object({ [key]: z.record(z.string(), z.unknown()) }).loose();
+
+/**
+ * Keys + labels of an OPNsense option map: `{key: {value, selected}}`, or grouped
+ * as `{group: {key: {value, selected}}}`.
+ */
+export function optionKeys(field: unknown): { value: string; label: string }[] {
+  if (!field || typeof field !== "object" || Array.isArray(field)) return [];
+  const out: { value: string; label: string }[] = [];
+  for (const [k, v] of Object.entries(field as Record<string, unknown>)) {
+    if (v && typeof v === "object" && !Array.isArray(v) && "value" in v) {
+      out.push({ value: k, label: String((v as { value: unknown }).value ?? k) });
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      out.push(...optionKeys(v)); // option group
+    } else if (typeof v === "string") {
+      out.push({ value: k, label: v });
+    }
+  }
+  return out;
+}
 
 export const SaveResponse = z.object({ result: z.string(), uuid: z.string().optional() }).loose();
 export const StatusResponse = z.object({ status: z.string() }).loose();
 
+/** Field names only (never values), to explain a shape mismatch without leaking data. */
+export function describeShape(data: unknown): string {
+  if (Array.isArray(data)) return `array(${data.length})`;
+  if (data && typeof data === "object") return `{${Object.keys(data).slice(0, 12).join(", ")}${Object.keys(data).length > 12 ? ", …" : ""}}`;
+  return typeof data;
+}
+
 export function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown, endpoint: string): T {
   const r = schema.safeParse(data);
-  if (!r.success) throw new OpnsenseError("protocol", `Unexpected response shape from ${endpoint}.`, { endpoint });
+  if (!r.success) {
+    const where = r.error.issues[0]?.path.join(".") || "(top level)";
+    throw new OpnsenseError("protocol", `Unexpected response shape from ${endpoint}: got ${describeShape(data)}, problem at ${where}.`, { endpoint });
+  }
   return r.data;
 }

@@ -84,3 +84,17 @@ export const ApplyRequestSchema = z.object({
 });
 
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
+
+const WorkingStateSchema = z.object({
+  rules: z.array(RuleSchema).max(20000),
+  aliases: z.array(AliasSchema).max(20000),
+  nextLocalId: z.number().int().min(0),
+});
+
+export const SharedRequestSchema = z.object({
+  shared: z.object({ baseline: SnapshotSchema, current: WorkingStateSchema }),
+  sites: z.record(Str(32), z.object({ baseline: SnapshotSchema })),
+  acknowledgeRisks: z.record(Str(32), z.boolean()).default({}),
+  haSync: z.record(Str(32), z.boolean()).default({}),
+  confirm: z.boolean().optional(),
+});

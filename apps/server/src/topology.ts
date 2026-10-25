@@ -20,7 +20,14 @@ import { validateBaseUrl, type EndpointConfig } from "@ruledeck/opnsense-client"
  * }
  */
 
-const NodeSchema = z.object({ url: z.string().min(1).max(512), caFile: z.string().min(1).max(1024).optional() }).strict();
+const NodeSchema = z
+  .object({
+    url: z.string().min(1).max(512),
+    caFile: z.string().min(1).max(1024).optional(),
+    /** SHA-256 certificate fingerprint to pin (hex, colons optional). */
+    tlsFingerprint: z.string().regex(/^([0-9A-Fa-f]{2}:?){31}[0-9A-Fa-f]{2}$/, "tlsFingerprint must be a SHA-256 fingerprint").optional(),
+  })
+  .strict();
 const IfaceSchema = z.object({ key: z.string().regex(/^[A-Za-z0-9_]{1,32}$/), label: z.string().min(1).max(64) }).strict();
 const SiteSchema = z
   .object({
@@ -72,7 +79,7 @@ export function parseTopology(text: string, readCa: (path: string) => string = (
   const sites: SiteConfig[] = t.sites.map((s) => {
     if (ids.has(s.id)) throw new TopologyError(`Duplicate site id "${s.id}".`);
     ids.add(s.id);
-    const node = (n: { url: string; caFile?: string }, role: string): NodeConfig => {
+    const node = (n: { url: string; caFile?: string; tlsFingerprint?: string }, role: string): NodeConfig => {
       try {
         validateBaseUrl(n.url);
       } catch (err) {
@@ -89,7 +96,7 @@ export function parseTopology(text: string, readCa: (path: string) => string = (
           throw new TopologyError(`Site ${s.id} ${role}: can't read caFile ${n.caFile}.`);
         }
       }
-      return { baseUrl: n.url, caPem, timeoutMs: s.timeoutMs };
+      return { baseUrl: n.url, caPem, tlsFingerprint: n.tlsFingerprint, timeoutMs: s.timeoutMs };
     };
     if (s.interfaces) {
       const keys = Object.values(s.interfaces).map((i) => i.key);

@@ -6,6 +6,7 @@ import {
   StatusResponse,
   FirmwareInfo,
   GetItemResponse,
+  optionKeys,
   InterfaceList,
   NetworkSelectOptions,
   parseOrThrow,
@@ -25,6 +26,7 @@ import {
 /** Fixed list of endpoints the client is allowed to call. */
 export const EP = {
   firmwareInfo: "core/firmware/info",
+  firmwareStatus: "core/firmware/status",
   searchRule: "firewall/filter/search_rule",
   getRule: "firewall/filter/get_rule",
   interfaceList: "firewall/filter/get_interface_list",
@@ -41,6 +43,12 @@ export const EP = {
   setAlias: "firewall/alias/set_item",
   delAlias: "firewall/alias/del_item",
   reconfigureAliases: "firewall/alias/reconfigure",
+  // Multi-site (verified against 26.7.7 source)
+  searchCategory: "firewall/category/search_item",
+  setCategory: "firewall/category/set_item",
+  haGet: "core/hasync/get",
+  haVersion: "core/hasync_status/version",
+  haRestartAll: "core/hasync_status/restart_all",
 } as const;
 
 const PAGE = 500;
@@ -71,9 +79,18 @@ export class OpnsenseClient {
     await this.http.close();
   }
 
+  /** OPNsense version, e.g. "26.7.7". Reads firmware/info, falling back to firmware/status. */
   async getVersion(): Promise<string> {
-    const info = parseOrThrow(FirmwareInfo, await this.http.get(EP.firmwareInfo), EP.firmwareInfo);
-    return info.product_version;
+    const pick = (raw: unknown) => {
+      const info = parseOrThrow(FirmwareInfo, raw, EP.firmwareInfo);
+      const v = info.product_version ?? info.product?.product_version;
+      return v && v !== "unknown" ? v : null;
+    };
+    const fromInfo = pick(await this.http.get(EP.firmwareInfo));
+    if (fromInfo) return fromInfo;
+    const fromStatus = pick(await this.http.get(EP.firmwareStatus));
+    if (fromStatus) return fromStatus;
+    throw new OpnsenseError("protocol", "The firewall didn't report its version.", { endpoint: EP.firmwareInfo });
   }
 
   /**
@@ -86,7 +103,8 @@ export class OpnsenseClient {
     try {
       version = await this.getVersion();
     } catch (err) {
-      if (!(err instanceof OpnsenseError && err.kind === "forbidden")) throw err;
+      // No privilege, or an answer we don't understand: sign in anyway, read-only (version unknown).
+      if (!(err instanceof OpnsenseError && (err.kind === "forbidden" || err.kind === "protocol" || err.kind === "unsupported"))) throw err;
     }
     await this.http.post(EP.searchRule, { body: { current: 1, rowCount: 1, searchPhrase: "", sort: {} } });
     return { version };
@@ -147,17 +165,14 @@ export class OpnsenseClient {
   /** Alias types offered by this firewall (read from the model defaults). */
   async getAliasTypes(): Promise<{ value: string; label: string }[]> {
     const raw = parseOrThrow(GetItemResponse("alias"), await this.http.get(EP.getAlias), EP.getAlias);
-    const type = (raw.alias as Record<string, unknown>).type;
-    if (!type || typeof type !== "object") return [];
-    return Object.entries(type as Record<string, { value: unknown }>).map(([value, o]) => ({ value, label: String(o.value) }));
+    return optionKeys((raw.alias as Record<string, unknown>).type);
   }
 
   /** Protocols offered by this firewall for rules (from get_rule defaults). */
   async getProtocols(): Promise<string[]> {
     const raw = parseOrThrow(GetItemResponse("rule"), await this.http.get(EP.getRule), EP.getRule);
-    const proto = (raw.rule as Record<string, unknown>).protocol;
-    if (!proto || typeof proto !== "object") return ["any", "TCP", "UDP", "TCP/UDP", "ICMP"];
-    return Object.keys(proto);
+    const keys = optionKeys((raw.rule as Record<string, unknown>).protocol).map((o) => o.value);
+    return keys.length ? keys : ["any", "TCP", "UDP", "TCP/UDP", "ICMP"];
   }
 
   /** Read everything RuleDeck needs, normalized to domain objects. */
@@ -238,5 +253,45 @@ export class OpnsenseClient {
   /** Reload alias tables (needed after alias changes). */
   async reconfigureAliases(): Promise<string> {
     return parseOrThrow(StatusResponse, await this.http.post(EP.reconfigureAliases), EP.reconfigureAliases).status;
+  }
+
+  // ------------------------------------------------------------- multi-site
+
+  /**
+   * Create-or-update by uuid. set_rule/{uuid} is an upsert in OPNsense
+   * (ApiMutableModelControllerBase::setBase), which lets the same rule be
+   * pushed to several firewalls under the same uuid.
+   */
+  async upsertRule(uuid: string, fields: FlatRecord): Promise<void> {
+    await this.save(EP.setRule, "rule", fields, [uuid]);
+  }
+
+  async upsertAlias(uuid: string, fields: FlatRecord): Promise<void> {
+    await this.save(EP.setAlias, "alias", fields, [uuid]);
+  }
+
+  async listCategories(): Promise<{ uuid: string; name: string; color: string }[]> {
+    const rows = await this.searchAll(EP.searchCategory);
+    return rows.map((r) => ({ uuid: String(r.uuid ?? ""), name: String(r.name ?? ""), color: String(r.color ?? "") }));
+  }
+
+  async upsertCategory(uuid: string, cat: { name: string; color: string }): Promise<void> {
+    const res = parseOrThrow(SaveResponse, await this.http.post(EP.setCategory, { params: [uuid], body: { category: cat } }), EP.setCategory);
+    if (res.result !== "saved") throw new OpnsenseError("rejected", `The firewall did not save the category (result: ${res.result}).`, { endpoint: EP.setCategory });
+  }
+
+  /** HA settings: a primary has a peer to synchronize to. */
+  async getHaSync(): Promise<{ synchronizeToIp: string }> {
+    const raw = (await this.http.get(EP.haGet)) as { hasync?: { synchronizetoip?: unknown } };
+    return { synchronizeToIp: typeof raw?.hasync?.synchronizetoip === "string" ? raw.hasync.synchronizetoip : "" };
+  }
+
+  /**
+   * Push the configuration to the HA secondary and reload its services
+   * (same as "Synchronize and reconfigure all" in the OPNsense UI).
+   */
+  async haSyncNow(): Promise<string> {
+    const raw = (await this.http.post(EP.haRestartAll)) as { status?: unknown };
+    return typeof raw?.status === "string" ? raw.status : "unknown";
   }
 }

@@ -101,14 +101,25 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Docs: security model, operator guide for users/privileges
 
 ## 9. Multi-site shared policy (Phase 7)
-- [ ] Mock: multiple instances (2 sites x HA pair), upsert by uuid, categories, hasync
-- [ ] Client: upsert create by uuid, categories, hasync get/version/restart_all
+- [x] Mock: multiple instances (2 sites x HA pair), upsert by uuid, categories, hasync
+- [x] Client: upsert create by uuid, categories, hasync get/version/restart_all
 - [x] Core: shared.ts (localize/canonicalize via interface map, label/kind guards, eligibility rules)
 - [x] Core: buildSharedView + drift detection (missing, differs, unmarked, unmappable, order)
 - [x] Core: projectToSite with slot-based ordering; new objects carry their final uuid (`new:<uuid>`)
-- [ ] Server: shared preflight (all sites, read-only) + sequential shared apply, stop on first failure
-- [ ] Server: HA role check, sync trigger, secondary verification
+- [x] Server: shared preflight (all sites, read-only) + sequential shared apply, stop on first failure
+- [x] Server: HA role check, sync trigger, secondary verification
 - [ ] UI: scope switcher (Shared / per site), shared rows locked in site view, share dialog
 - [ ] UI: drift panel with resolutions, per-site review + acknowledgement, per-site result timeline, "Finish at site"
 - [ ] E2E: build a rule once → applied at both sites with correct interface mapping → HA synced → no drift
 - [ ] Docs: multi-site operator guide
+
+## 10. UI rework (feedback 2026-10-25)
+- [ ] Table columns size to their content: min width = longest value in the column (no truncation), horizontal scroll for the rest
+- [ ] Replace inline cell editing with a Panorama/Palo Alto style rule editor: double-click (or Enter) on a row opens a form dialog with tabs (General, Source, Destination, Service/Port, Options/Advanced)
+- [ ] Keep inline alias creation inside the form's source/destination pickers ("Create alias" without leaving the form)
+- [ ] Same form style for aliases (alias editor dialog)
+- [ ] Grid stays for viewing, selecting, reordering, bulk edit, copy/paste; editing happens in the form
+
+## 11. Lab findings to finish (2026-10-25)
+- [x] Record real OPNsense differences in docs/api-compatibility.md (get_rule defaults shape, firmware/info shape, unauthenticated API -> 302, TLS session resumption vs pinning)
+- [x] Commit the work in progress (multi-site mock/client/server + certificate pinning + lab fixes) after fixing the 3 failing shared-apply tests

@@ -109,6 +109,17 @@ export class MockUserError extends Error {
 
 export interface MockStateOptions {
   version?: string;
+  /** Interface key of the DMZ at this site (sites differ: opt1, opt2, ...). */
+  dmzKey?: string;
+  /** Replaces the first 8 hex digits of seed uuids, so different sites don't share uuids. */
+  uuidSalt?: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface MockCategory {
+  name: string;
+  color: string;
 }
 
 export class MockState {
@@ -116,6 +127,9 @@ export class MockState {
   interfaces: MockInterface[];
   rules = new Map<string, RawRecord>();
   aliases = new Map<string, RawRecord>();
+  categories = new Map<string, MockCategory>();
+  dmzKey: string;
+  private salt?: string;
   legacyRules: RawRecord[] = [];
   /** True after a write and before filter/apply. */
   pendingApply = false;
@@ -124,29 +138,36 @@ export class MockState {
 
   constructor(opts: MockStateOptions = {}) {
     this.version = opts.version ?? "26.7.7";
+    this.dmzKey = opts.dmzKey ?? "opt1";
+    this.salt = opts.uuidSalt;
     this.interfaces = [
       { key: "lan", descr: "LAN" },
       { key: "wan", descr: "WAN" },
-      { key: "opt1", descr: "DMZ" },
+      { key: this.dmzKey, descr: "DMZ" },
       { key: "lo0", descr: "Loopback", virtual: true },
     ];
+    if (this.dmzKey !== "opt1") this.interfaces.splice(2, 0, { key: "opt1", descr: "GUEST" });
     this.seed();
   }
 
+  private id(u: string) {
+    return this.salt ? this.salt + u.slice(8) : u;
+  }
+
   private seed() {
-    this.addAliasRaw("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0001", {
+    this.addAliasRaw(this.id("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0001"), {
       name: "RFC1918",
       type: "network",
       content: "10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16",
       description: "Private networks",
     });
-    this.addAliasRaw("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0002", {
+    this.addAliasRaw(this.id("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0002"), {
       name: "WEB_PORTS",
       type: "port",
       content: "80\n443",
       description: "HTTP and HTTPS",
     });
-    this.addAliasRaw("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0003", {
+    this.addAliasRaw(this.id("8b1b7ae5-6c35-4b8e-9b55-3d2b6b2a0003"), {
       name: "ADMIN_HOSTS",
       type: "host",
       content: "192.168.1.5\n192.168.1.6",
@@ -162,7 +183,11 @@ export class MockState {
       ["0c6f0f84-1b2a-4c1e-8f0e-000000000006", { sequence: "500", interface: "opt1", action: "block", destination_net: "lan", description: "Block DMZ to LAN" }],
       ["0c6f0f84-1b2a-4c1e-8f0e-000000000007", { sequence: "600", interface: "wan", enabled: "0", protocol: "TCP", destination_net: "wanip", destination_port: "22", description: "SSH from WAN (disabled)" }],
     ];
-    for (const [uuid, rec] of seed) this.rules.set(uuid, { ...RULE_DEFAULTS, ...rec });
+    for (const [uuid, rec] of seed) {
+      const r = { ...RULE_DEFAULTS, ...rec };
+      for (const f of ["interface", "source_net", "destination_net"]) if (r[f] === "opt1") r[f] = this.dmzKey;
+      this.rules.set(this.id(uuid), r);
+    }
 
     this.legacyRules = [
       {
@@ -259,6 +284,9 @@ export class MockState {
       v["rule.protocol"] = "Ports can only be used with TCP and/or UDP.";
     }
     if ((rec.description ?? "").length > 255) v["rule.description"] = "Description too long.";
+    for (const c of (rec.categories ?? "").split(",").filter(Boolean)) {
+      if (!this.categories.has(c)) v["rule.categories"] = "Related category not found.";
+    }
     const seq = Number(rec.sequence);
     if (!Number.isInteger(seq) || seq < 1 || seq > 999999) v["rule.sequence"] = "Provide a valid sequence for sorting";
     return v;
@@ -283,9 +311,11 @@ export class MockState {
     return uuid;
   }
 
+  /** set_rule is an upsert: an unknown but valid uuid creates the rule (ApiMutableModelControllerBase::setBase). */
   setRule(uuid: string, input: RawRecord) {
-    const cur = this.rules.get(uuid);
-    if (!cur) throw new MockUserError("invalid uuid, upsert not allowed", "Filter");
+    const existing = this.rules.get(uuid);
+    if (!existing && !UUID_RE.test(uuid)) throw new MockUserError("invalid uuid, upsert not allowed", "Filter");
+    const cur = existing ?? { ...RULE_DEFAULTS };
     const rec = { ...cur, ...this.stripVolatile(input) };
     const errs = this.validateRule(rec);
     if (Object.keys(errs).length) throw new MockValidationError(errs);
@@ -358,6 +388,9 @@ export class MockState {
     const entries = (rec.content ?? "").split("\n").filter(Boolean);
     const entryIssues = validateAliasEntries(rec.type!, entries, this.aliasNames()).filter((m) => !m.startsWith("Add at least"));
     if (entryIssues.length) v["alias.content"] = entryIssues.join(" ");
+    for (const c of (rec.categories ?? "").split(",").filter(Boolean)) {
+      if (!this.categories.has(c)) v["alias.categories"] = "Related category not found.";
+    }
     return v;
   }
 
@@ -378,12 +411,13 @@ export class MockState {
   }
 
   setAlias(uuid: string, input: RawRecord) {
-    const cur = this.aliases.get(uuid);
-    if (!cur) throw new MockUserError("invalid uuid, upsert not allowed", "Alias");
+    const existing = this.aliases.get(uuid);
+    if (!existing && !UUID_RE.test(uuid)) throw new MockUserError("invalid uuid, upsert not allowed", "Alias");
+    const cur = existing ?? { ...ALIAS_DEFAULTS };
     const rec = { ...cur, ...this.cleanAlias(input) };
     const errs = this.validateAlias(rec, uuid);
     if (Object.keys(errs).length) throw new MockValidationError(errs);
-    if (rec.name !== cur.name) this.refactorAlias(cur.name!, rec.name!);
+    if (existing && rec.name !== cur.name) this.refactorAlias(cur.name!, rec.name!);
     this.aliases.set(uuid, rec);
     this.aliasPendingReconfigure = true;
   }
@@ -420,5 +454,34 @@ export class MockState {
     this.aliases.delete(uuid);
     this.aliasPendingReconfigure = true;
     return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Categories
+
+  setCategory(uuid: string, input: Partial<MockCategory>) {
+    if (!UUID_RE.test(uuid)) throw new MockUserError("invalid uuid, upsert not allowed", "Category");
+    const name = (input.name ?? this.categories.get(uuid)?.name ?? "").trim();
+    if (!name) throw new MockValidationError({ "category.name": "A name is required." });
+    for (const [u, c] of this.categories) {
+      if (u !== uuid && c.name === name) throw new MockValidationError({ "category.name": "A category with this name already exists." });
+    }
+    this.categories.set(uuid, { name, color: input.color ?? this.categories.get(uuid)?.color ?? "" });
+  }
+
+  categoryNames(csv: string | undefined): string {
+    return (csv ?? "").split(",").filter(Boolean).map((u) => this.categories.get(u)?.name ?? u).join(",");
+  }
+
+  // -------------------------------------------------------------------------
+  // HA: what XMLRPC sync copies to the secondary (rules without nosync, aliases, categories)
+
+  syncTo(peer: MockState) {
+    peer.categories = new Map([...this.categories].map(([u, c]) => [u, { ...c }]));
+    peer.aliases = new Map([...this.aliases].map(([u, a]) => [u, { ...a }]));
+    const kept = [...peer.rules].filter(([, r]) => r.nosync === "1");
+    peer.rules = new Map([...[...this.rules].filter(([, r]) => r.nosync !== "1").map(([u, r]) => [u, { ...r }] as [string, RawRecord]), ...kept]);
+    peer.applyCount++;
+    peer.pendingApply = false;
   }
 }

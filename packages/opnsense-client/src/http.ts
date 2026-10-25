@@ -1,4 +1,4 @@
-import { Agent, fetch } from "undici";
+import { Agent, buildConnector, fetch } from "undici";
 import { mapResponseError, mapTransportError, OpnsenseError } from "./errors.ts";
 
 /**
@@ -17,6 +17,12 @@ export interface EndpointConfig {
   baseUrl: string;
   /** PEM CA bundle for firewalls with a private/self-signed CA. */
   caPem?: string;
+  /**
+   * SHA-256 fingerprint of the firewall's certificate (hex, colons optional).
+   * When set, exactly this certificate is accepted, whatever its issuer or name.
+   * Useful for self-signed certificates on IP addresses; stricter than a CA check.
+   */
+  tlsFingerprint?: string;
   timeoutMs?: number;
 }
 
@@ -25,8 +31,40 @@ export interface ConnectionConfig extends EndpointConfig {
 }
 
 /** TLS-verifying dispatcher. Verification can't be turned off; a custom CA can be added. */
-export function makeDispatcher(caPem?: string): Agent {
-  return new Agent({ connect: caPem ? { ca: caPem, rejectUnauthorized: true } : { rejectUnauthorized: true } });
+export const normalizeFingerprint = (fp: string) => fp.replace(/[^0-9a-f]/gi, "").toLowerCase();
+
+export class PinMismatchError extends Error {
+  code = "ERR_TLS_PIN_MISMATCH";
+}
+
+/**
+ * TLS dispatcher. Verification is never turned off: either the normal CA/name
+ * check (optionally with a private CA), or certificate pinning, where only the
+ * certificate with the configured SHA-256 fingerprint is accepted.
+ */
+export function makeDispatcher(caPem?: string, tlsFingerprint?: string): Agent {
+  if (!tlsFingerprint) {
+    return new Agent({ connect: caPem ? { ca: caPem, rejectUnauthorized: true } : { rejectUnauthorized: true } });
+  }
+  const want = normalizeFingerprint(tlsFingerprint);
+  // Chain/name checks are replaced by the pin check below, which runs before any request is sent.
+  // No TLS session resumption: a resumed session doesn't present the certificate,
+  // so every connection must do a full handshake for the pin to be checked.
+  const base = buildConnector({ rejectUnauthorized: false, maxCachedSessions: 0 });
+  return new Agent({
+    connect: (opts, cb) =>
+      base(opts, (err, socket) => {
+        if (err || !socket) return cb(err ?? new Error("TLS connect failed"), null);
+        if (opts.protocol !== "https:") return cb(null, socket); // plain http is only allowed for loopback
+        const tls = socket as unknown as { getPeerCertificate?: () => { fingerprint256?: string } };
+        const got = normalizeFingerprint(tls.getPeerCertificate?.().fingerprint256 ?? "");
+        if (got !== want) {
+          socket.destroy();
+          return cb(new PinMismatchError(`certificate fingerprint ${got || "(none)"} doesn't match the pinned one`), null);
+        }
+        cb(null, socket);
+      }),
+  });
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
@@ -80,7 +118,7 @@ export class OpnsenseHttp {
       this.csrfHeader = { "x-csrftoken": cfg.auth.csrfToken };
     }
     this.timeoutMs = cfg.timeoutMs ?? 15_000;
-    this.dispatcher = makeDispatcher(cfg.caPem);
+    this.dispatcher = makeDispatcher(cfg.caPem, cfg.tlsFingerprint);
   }
 
   get origin(): string {

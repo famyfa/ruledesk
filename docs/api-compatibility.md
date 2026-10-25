@@ -96,3 +96,17 @@ There is no automatic rollback. Recovery relies on config history (every save cr
 - Legacy rules (Firewall ▸ Rules [legacy]) and automatic rules are read-only in RuleDeck.
 - NAT (`d_nat`, `source_nat`, `one_to_one`, `npt`) is out of scope for the MVP.
 - No ETag or config revision exists per object. Conflict detection compares fingerprints of re-read objects (see `field-mapping.md`).
+
+## Findings from a live lab (2026-10-24/25)
+
+Two OPNsense HA pairs, signed in with GUI username/password. These are the first checks against real firewalls; they differ from what the source alone suggested:
+
+| Area | Expected (source) | Seen live | What RuleDeck does now |
+|---|---|---|---|
+| Unauthenticated API call | 401 | **302 redirect** to the login page | Any 3xx on an API call means "not signed in / session ended" |
+| `core/firmware/info` | `product_id` + `product_version` at top level | Different shape (not as expected) | Version read from `product_version` or `product.product_version`, fallback `core/firmware/status`. If still unknown: sign in read-only with a note |
+| `firewall/filter/get_rule` (defaults) | Every field is a string or an option map | Some fields have other shapes | Only the outer structure is validated; the protocol list is read tolerantly (option maps and option groups) |
+| TLS | CA-signed or private CA | Self-signed certificate for `OPNsense.internal` on an IP address | Certificate pinning per node (`tlsFingerprint` in the topology). TLS session resumption is disabled for pinned connections, because a resumed session doesn't present the certificate |
+| Login page | Hidden CSRF field + session cookie | As expected (22-char key) | — |
+
+Shape errors now name the top-level fields that were received (never values), so further differences can be documented from the error text alone.

@@ -59,7 +59,7 @@ async function readLimited(res: Awaited<ReturnType<typeof fetch>>): Promise<stri
 
 export async function loginWithPassword(endpoint: EndpointConfig, username: string, password: string): Promise<LoginResult> {
   const base = validateBaseUrl(endpoint.baseUrl);
-  const dispatcher: Agent = makeDispatcher(endpoint.caPem);
+  const dispatcher: Agent = makeDispatcher(endpoint.caPem, endpoint.tlsFingerprint);
   const timeout = () => AbortSignal.timeout(endpoint.timeoutMs ?? 15_000);
   const jar = new Map<string, string>();
   const where = "login";
@@ -134,7 +134,7 @@ export async function loginWithPassword(endpoint: EndpointConfig, username: stri
 /** End the OPNsense GUI session (best effort). */
 export async function logoutSession(endpoint: EndpointConfig, credentials: Credentials): Promise<void> {
   if (credentials.kind !== "session") return;
-  const dispatcher = makeDispatcher(endpoint.caPem);
+  const dispatcher = makeDispatcher(endpoint.caPem, endpoint.tlsFingerprint);
   try {
     const res = await fetch(new URL("/index.php?logout", validateBaseUrl(endpoint.baseUrl)), {
       dispatcher,

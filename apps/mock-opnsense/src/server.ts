@@ -18,6 +18,10 @@ export interface MockServerOptions extends MockAuthOptions {
   apiSecret?: string;
   version?: string;
   logger?: boolean;
+  /** Interface key of the DMZ at this site. */
+  dmzKey?: string;
+  /** Distinct seed uuids per site. */
+  uuidSalt?: string;
 }
 
 /** One change recorded with the user who made it, like OPNsense's config history. */
@@ -39,6 +43,8 @@ export interface MockServer {
   state: () => MockState;
   auth: MockAuth;
   history: () => HistoryEntry[];
+  /** Make this mock an HA primary that syncs to `peer` (its secondary); null = no HA sync target. */
+  linkSecondary: (peer: MockServer | null, peerAddress?: string) => void;
 }
 
 /** Turn an option-field value into OPNsense's `{key: {value, selected}}` map. */
@@ -52,7 +58,9 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     ...opts,
     apiKeys: opts.apiKeys ?? { [opts.apiKey ?? "mock-key"]: { secret: opts.apiSecret ?? "mock-secret", user: "root" } },
   });
-  let state = new MockState({ version: opts.version });
+  const stateOpts = () => ({ version: opts.version, dmzKey: opts.dmzKey, uuidSalt: opts.uuidSalt });
+  let state = new MockState(stateOpts());
+  let secondary: { peer: MockServer; address: string } | null = null;
   let faults: Fault[] = [];
   let history: HistoryEntry[] = [];
 
@@ -111,7 +119,7 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
   // ---------------------------------------------------------------- control
   app.post("/__mock/reset", async (req) => {
     const body = (req.body ?? {}) as { version?: string };
-    state = new MockState({ version: body.version ?? opts.version });
+    state = new MockState({ ...stateOpts(), version: body.version ?? opts.version });
     faults = [];
     history = [];
     auth.dnsRebind = opts.dnsRebind ?? false;
@@ -147,6 +155,7 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     applyCount: state.applyCount,
     rules: state.allRulesSorted(),
     aliases: [...state.aliases.entries()].map(([uuid, a]) => ({ uuid, ...a })),
+    categories: [...state.categories.entries()].map(([uuid, c]) => ({ uuid, ...c })),
   }));
 
   // ---------------------------------------------------------------- core
@@ -292,7 +301,10 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
       .map(([uuid, a]): RawRecord => ({ ...a, uuid }))
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     if (p.searchPhrase) rows = rows.filter((r) => matchesPhrase(r, String(p.searchPhrase)));
-    return paginate(rows.map((r) => ({ ...r, categories_uuid: [] as string[] })), p);
+    return paginate(
+      rows.map((r) => ({ ...r, categories: state.categoryNames(r.categories), categories_uuid: (r.categories ?? "").split(",").filter(Boolean) })),
+      p,
+    );
   };
   app.get("/api/firewall/alias/search_item", searchAlias);
   app.post("/api/firewall/alias/search_item", searchAlias);
@@ -342,7 +354,47 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     return { status: "ok" };
   });
 
+  // ---------------------------------------------------------------- category
+  const searchCategory = async (req: FastifyRequest) =>
+    paginate(
+      [...state.categories].map(([uuid, c]) => ({ uuid, ...c })),
+      paramsOf(req),
+    );
+  app.get("/api/firewall/category/search_item", searchCategory);
+  app.post("/api/firewall/category/search_item", searchCategory);
+  app.post("/api/firewall/category/set_item/:uuid", async (req: FastifyRequest<{ Params: { uuid: string } }>) => {
+    const body = (req.body ?? {}) as { category?: { name?: string; color?: string } };
+    state.setCategory(req.params.uuid, body.category ?? {});
+    return { result: "saved" };
+  });
+
+  // ---------------------------------------------------------------- HA (core/hasync, core/hasync_status)
+  app.get("/api/core/hasync/get", async () => ({
+    hasync: {
+      synchronizetoip: secondary?.address ?? "",
+      pfsyncinterface: secondary ? "lan" : "",
+      syncitems: {},
+    },
+  }));
+  app.get("/api/core/hasync_status/version", async (_req, reply) => {
+    if (!secondary) return reply.send({ status: "error", message: "no peer configured" });
+    return { response: { firmware: { version: secondary.peer.state().version } } };
+  });
+  app.post("/api/core/hasync_status/restart_all", async () => {
+    if (!secondary) return { status: "failed" };
+    state.syncTo(secondary.peer.state());
+    return { status: "ok", count: 3 };
+  });
+
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ errorMessage: "Endpoint not found" }));
 
-  return { app, state: () => state, auth, history: () => history };
+  return {
+    app,
+    state: () => state,
+    auth,
+    history: () => history,
+    linkSecondary: (peer, address = "10.0.0.2") => {
+      secondary = peer ? { peer, address } : null;
+    },
+  };
 }

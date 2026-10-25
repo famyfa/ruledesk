@@ -209,7 +209,7 @@ describe("projection to each site", () => {
   it("verifies the result against the shared state", () => {
     const { s, shared } = setup();
     const wc = updateRule(shared, U1, { log: true });
-    expect(sharedStateMatches(s[0]!, wc.current, [U1])).toEqual([`Rule "rule 11" differs.`]);
+    expect(sharedStateMatches(s[0]!, wc.current, [U1])[0]).toMatch(/Rule "rule 11" differs: Logging yes → no/);
     const after = { ...s[0]!, snapshot: { ...s[0]!.snapshot, rules: projectToSite(s[0]!, wc).wc.current.rules } };
     expect(sharedStateMatches(after, wc.current, [U1])).toEqual([]);
   });

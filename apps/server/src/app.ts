@@ -9,7 +9,8 @@ import type { AppConfig } from "./config.ts";
 import { RateLimiter, safeEqual, SessionStore, type Session, type SiteSession } from "./auth.ts";
 import { applyToSite, endSiteSession, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
 import { publicTopology, type SiteConfig } from "./topology.ts";
-import { ApplyRequestSchema } from "./schemas.ts";
+import { ApplyRequestSchema, SharedRequestSchema } from "./schemas.ts";
+import { sharedApply, sharedPreflight } from "./shared-apply.ts";
 
 export const SESSION_COOKIE = "ruledeck_session";
 export const CSRF_HEADER = "x-csrf-token";
@@ -48,6 +49,8 @@ function siteView(site: SiteConfig, s: SiteSession | undefined) {
     method: s?.method ?? null,
     host: s ? new URL(site.primary.baseUrl).host : null,
     info: s?.info ?? null,
+    /** Logical interface -> this site's key/label (from the topology; no secrets). */
+    interfaces: s ? (site.interfaces ?? null) : null,
   };
 }
 
@@ -332,6 +335,42 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         verified: result.state.verified,
       },
       "apply finished",
+    );
+    return { result };
+  });
+
+  // ------------------------------------------------------- shared (multi-site)
+  const parseShared = (req: FastifyRequest, reply: FastifyReply) => {
+    const body = SharedRequestSchema.safeParse(req.body);
+    if (!body.success) {
+      reply.code(400).send({
+        error: { kind: "bad_request", message: "Invalid shared change set: " + body.error.issues.slice(0, 3).map((i) => `${i.path.join(".")} ${i.message}`).join("; ") },
+      });
+      return null;
+    }
+    return body.data;
+  };
+
+  app.post("/api/shared/preflight", { bodyLimit: 32 * 1024 * 1024 }, async (req, reply) => {
+    const body = parseShared(req, reply);
+    if (!body) return;
+    return { plans: await sharedPreflight(topology, req.session!, body) };
+  });
+
+  app.post("/api/shared/apply", { bodyLimit: 32 * 1024 * 1024 }, async (req, reply) => {
+    if (!applyLimiter.take(req.session!.id)) {
+      return reply.code(429).send({ error: { kind: "rate_limited", message: "Too many apply attempts. Wait a minute." } });
+    }
+    if (!config.allowWrites) {
+      return reply.code(403).send({ error: { kind: "writes_disabled", message: "Sending changes to firewalls is disabled on this server (RULEDECK_ALLOW_WRITES is not true)." } });
+    }
+    const body = parseShared(req, reply);
+    if (!body) return;
+    if (body.confirm !== true) return reply.code(400).send({ error: { kind: "bad_request", message: "Confirmation missing." } });
+    const result = await sharedApply(topology, req.session!, body);
+    req.log.info(
+      { event: "shared_apply", outcome: result.outcome, sites: result.sites.map((s) => `${s.siteId}:${s.status}${s.ha ? `/ha:${s.ha.step}` : ""}`) },
+      "shared apply finished",
     );
     return { result };
   });

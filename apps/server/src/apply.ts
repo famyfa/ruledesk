@@ -6,6 +6,7 @@ import {
   planOrdering,
   ruleFieldChanges,
   RULE_FIELDS,
+  uuidOfLocalId,
   validateWorkingState,
   type Alias,
   type FieldChange,
@@ -38,7 +39,7 @@ export interface Conflict {
   objectType: "rule" | "alias";
   id: string;
   label: string;
-  reason: "modified" | "deleted" | "name_taken" | "order_changed";
+  reason: "modified" | "deleted" | "name_taken" | "order_changed" | "uuid_in_use";
   message: string;
   fields?: FieldChange[];
 }
@@ -79,6 +80,17 @@ export function detectConflicts(wc: WorkingCopy, live: ReadResult): Conflict[] {
 
   for (const c of changes.changes) {
     if (isLocalId(c.id)) {
+      const uuid = uuidOfLocalId(c.id);
+      if (uuid && (liveRules.has(uuid) || liveAliases.has(uuid))) {
+        conflicts.push({
+          objectType: c.objectType,
+          id: c.id,
+          label: c.label,
+          reason: "uuid_in_use",
+          message: "An object with this identity already exists on the firewall (for example from an earlier, interrupted apply). Reconcile to update it instead.",
+        });
+        continue;
+      }
       if (c.objectType === "alias") {
         const name = wc.current.aliases.find((a) => a.id === c.id)?.name;
         if (name && live.aliases.some((a) => a.name === name)) {
@@ -177,7 +189,12 @@ export async function runApply(
   for (const a of wc.current.aliases) {
     const base = baseAliases.get(a.id);
     if (!base) {
-      ops.push({ label: `Create alias ${a.name}`, run: async () => void idMap.set(a.id, await client.addAlias(aliasToRecord(a))) });
+      const uuid = uuidOfLocalId(a.id);
+      ops.push({
+        label: `Create alias ${a.name}`,
+        // Create under the uuid chosen up front (upsert), so retries and other sites use the same identity.
+        run: async () => void idMap.set(a.id, uuid ? (await client.upsertAlias(uuid, aliasToRecord(a)), uuid) : await client.addAlias(aliasToRecord(a))),
+      });
     } else {
       const fields = changedAliasFields(base, a);
       if (Object.keys(fields).length) ops.push({ label: `Update alias ${a.name}`, run: () => client.setAlias(a.id, fields) });
@@ -190,7 +207,11 @@ export async function runApply(
     if (!base) {
       const rec = ruleToRecord(r);
       if (seq !== undefined) rec.sequence = String(seq);
-      ops.push({ label: `Create rule "${labelRule(r)}"`, run: async () => void idMap.set(r.id, await client.addRule(rec)) });
+      const uuid = uuidOfLocalId(r.id);
+      ops.push({
+        label: `Create rule "${labelRule(r)}"`,
+        run: async () => void idMap.set(r.id, uuid ? (await client.upsertRule(uuid, rec), uuid) : await client.addRule(rec)),
+      });
     } else {
       const fields = ruleChangedFields(base, r);
       if (seq !== undefined) fields.sequence = String(seq);

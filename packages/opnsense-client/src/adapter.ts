@@ -14,7 +14,6 @@ function isDecoration(key: string): boolean {
     key.startsWith("%") ||
     key.startsWith("alias_meta_") ||
     key === "category_colors" ||
-    key === "categories_uuid" ||
     ["evaluations", "states", "packets", "bytes", "pf_rules", "is_alias", "audit"].includes(key)
   );
 }
@@ -146,7 +145,7 @@ export function ruleChangedFields(before: FirewallRule, after: FirewallRule): Fl
   return out;
 }
 
-const MAPPED_ALIAS_KEYS = new Set(["name", "type", "enabled", "content", "description", "categories"]);
+const MAPPED_ALIAS_KEYS = new Set(["name", "type", "enabled", "content", "description", "categories", "categories_uuid"]);
 
 export function aliasFromRecord(rec: FlatRecord): Alias {
   const extra: Record<string, string> = {};
@@ -159,7 +158,8 @@ export function aliasFromRecord(rec: FlatRecord): Alias {
     // search_item returns content comma-joined, get_item newline-joined.
     entries: (rec.content ?? "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean),
     description: rec.description ?? "",
-    categories: list(rec.categories),
+    // alias/search_item shows category NAMES in `categories` and the uuids in `categories_uuid`.
+    categories: rec.categories_uuid !== undefined ? list(rec.categories_uuid) : list(rec.categories),
     extra,
   };
 }

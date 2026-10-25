@@ -24,6 +24,18 @@ export const SHARED_SAFE_EXTRA_FIELDS = ["statetype", "state-policy", "icmptype"
 /** Alias types that mean the same thing on every site. */
 export const SHARED_ALIAS_TYPES = ["host", "network", "port", "url", "urltable", "geoip"];
 
+/** Short stable hash (FNV-1a, 2x32 bit) for fingerprints; works in browser and node. */
+export function shortHash(text: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+
 export type SiteInterfaceMap = Record<string, { key: string; label: string }>;
 
 export interface SiteInput {
@@ -123,9 +135,15 @@ export function kindProblems(sites: SiteInput[]): string[] {
 // ---------------------------------------------------------------------------
 // Canonical form and eligibility
 
+/** Model defaults (Filter.xml): a field at its default counts as "not set" when comparing sites. */
+const SHARED_EXTRA_DEFAULTS: Record<string, string> = { statetype: "keep", allowopts: "0", "state-policy": "" };
+
 function pickExtra(extra: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const k of SHARED_SAFE_EXTRA_FIELDS) if (extra[k] !== undefined && extra[k] !== "") out[k] = extra[k]!;
+  for (const k of SHARED_SAFE_EXTRA_FIELDS) {
+    const v = extra[k];
+    if (v !== undefined && v !== "" && v !== SHARED_EXTRA_DEFAULTS[k]) out[k] = v;
+  }
   return out;
 }
 
@@ -250,7 +268,7 @@ export function buildSharedView(sites: SiteInput[]): SharedView {
     const ref = forms.get(refSite.siteId)!;
     reference[uuid] = refSite.siteId;
     aliases.push({ ...ref, categories: [SHARED_CATEGORY_UUID], extra: {} });
-    fingerprints[uuid] = JSON.stringify(canonicalAlias(ref));
+    fingerprints[uuid] = shortHash(JSON.stringify(canonicalAlias(ref)));
     const perSite: DriftItem["sites"] = {};
     let differs = false;
     let missing = false;
@@ -283,7 +301,7 @@ export function buildSharedView(sites: SiteInput[]): SharedView {
     const ref = forms.get(refSite.siteId) as FirewallRule;
     reference[uuid] = refSite.siteId;
     rules.push({ ...ref, categories: [SHARED_CATEGORY_UUID], extra: pickExtra(ref.extra), sequence: ref.sequence });
-    fingerprints[uuid] = JSON.stringify(canonicalRule(ref));
+    fingerprints[uuid] = shortHash(JSON.stringify(canonicalRule(ref)));
     const perSite: DriftItem["sites"] = {};
     let differs = false;
     let missing = false;
@@ -510,7 +528,8 @@ export function sharedStateMatches(site: SiteInput, shared: WorkingState, uuids:
       if (!liveRule || !isShared(liveRule)) problems.push(`Rule "${wantRule.description}" is missing.`);
       else {
         try {
-          if (!sameRule(canonicalizeRule(liveRule, site.map, site.siteId), wantRule)) problems.push(`Rule "${wantRule.description}" differs.`);
+          const diffs = ruleFieldChanges(canonicalRule(wantRule), canonicalRule(canonicalizeRule(liveRule, site.map, site.siteId)));
+          if (diffs.length) problems.push(`Rule "${wantRule.description}" differs: ${diffs.map((d) => `${d.label} ${d.before || "(empty)"} → ${d.after || "(empty)"}`).join("; ")}.`);
         } catch (err) {
           problems.push((err as Error).message);
         }

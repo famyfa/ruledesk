@@ -59,10 +59,17 @@ export function mapTransportError(err: unknown, endpoint: string): OpnsenseError
   if (e?.name === "TimeoutError" || e?.name === "AbortError" || code === "UND_ERR_HEADERS_TIMEOUT" || code === "UND_ERR_BODY_TIMEOUT") {
     return new OpnsenseError("timeout", "The firewall did not respond in time.", { endpoint });
   }
+  if (code === "ERR_TLS_PIN_MISMATCH") {
+    return new OpnsenseError(
+      "tls",
+      "The firewall presented a different certificate than the one pinned in the topology (tlsFingerprint). If the firewall's certificate was renewed, update the fingerprint; otherwise someone may be intercepting the connection.",
+      { endpoint },
+    );
+  }
   if (TLS_CODES.has(code)) {
     return new OpnsenseError(
       "tls",
-      `The firewall's TLS certificate could not be verified (${code}). Add its CA certificate as "caFile" for this firewall in the topology file.`,
+      `The firewall's TLS certificate could not be verified (${code}). Pin it with "tlsFingerprint" (npm run fingerprint -- <address>) or add its CA as "caFile" in the topology file.`,
       { endpoint },
     );
   }
