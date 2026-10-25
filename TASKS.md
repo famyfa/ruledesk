@@ -128,3 +128,14 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 ## 11. Lab findings to finish (2026-10-25)
 - [x] Record real OPNsense differences in docs/api-compatibility.md (get_rule defaults shape, firmware/info shape, unauthenticated API -> 302, TLS session resumption vs pinning)
 - [x] Commit the work in progress (multi-site mock/client/server + certificate pinning + lab fixes) after fixing the 3 failing shared-apply tests
+
+## 12. Filtering, sync and global views (feedback 2026-10-25)
+- [x] Panorama-style filter expressions (and/or/not, eq/neq/contains/in/notin, CIDR and port-range matching, alias expansion, suggestions, help list, readable syntax errors) for the log, rules and aliases
+- [x] Click a value in the log to filter on it (Shift+click excludes it)
+- [x] Sync aliases / rules from one site to another: matched by name or description, interfaces translated, needed aliases brought along, categories stay local; staged as pending changes at the target (nothing sent)
+- [x] Global monitor: log of all signed-in sites merged, with a Site column and a `site` filter
+- [x] Global tab: rules and aliases of all sites side by side (same / differs / missing), filter, select and sync
+- [x] Rule name (description) is the first column; clicking it opens the rule form
+- [ ] Verify the sync and global views against the live lab (two HA sites)
+- [ ] Docs: operator notes for sync vs. shared policy (docs/multi-site.md)
+

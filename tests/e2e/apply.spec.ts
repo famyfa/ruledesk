@@ -14,7 +14,7 @@ test.describe("apply to firewall", () => {
     await login(page);
 
     // Add a rule in the form: description, TCP/443, destination alias created on the spot.
-    await cell(page, "Allow web to DMZ", "description").click();
+    await cell(page, "Allow web to DMZ", "action").click();
     const form = await newRule(page);
     await form.getByLabel("Description").fill("Allow HTTPS to web servers");
     await tab(form, "Service");

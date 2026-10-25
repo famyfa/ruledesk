@@ -12,7 +12,7 @@ test.describe("inline alias creation (rule form)", () => {
 
   /** Fill the new-rule form: description, TCP/443 and a destination alias created on the spot. */
   async function buildWebRule(page: Page) {
-    await cell(page, "Allow web to DMZ", "description").click();
+    await cell(page, "Allow web to DMZ", "action").click();
     const dialog = await newRule(page);
     await dialog.getByLabel("Description").fill("Allow HTTPS to web servers");
 

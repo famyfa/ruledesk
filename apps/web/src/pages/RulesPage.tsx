@@ -15,6 +15,7 @@ import {
 } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
 import { FilterInput, useFilter } from "../components/FilterInput.tsx";
+import { SyncDialog } from "../components/SyncDialog.tsx";
 import { RuleGrid } from "../grid/RuleGrid.tsx";
 import { RuleEditorDialog } from "../forms/RuleEditorDialog.tsx";
 import type { ObjectContext } from "../grid/objects.ts";
@@ -30,7 +31,8 @@ interface Filters {
 const EMPTY: Filters = { text: "", iface: "", action: "", protocol: "", changedOnly: false };
 
 export function RulesPage({ initialActiveId = null }: { initialActiveId?: string | null }) {
-  const { wc, edit } = useWorkspace();
+  const { wc, edit, sites, siteId } = useWorkspace();
+  const [syncOpen, setSyncOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(initialActiveId);
@@ -112,6 +114,12 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
         <span className="count">
           {rows.length} of {wc.current.rules.length} rules
         </span>
+        {sites.filter((s) => s.signedIn).length > 1 && siteId && (
+          <button type="button" onClick={() => setSyncOpen(true)} title="Copy rules to another site (staged there for review)">
+            Sync to site…
+          </button>
+        )}
+        {syncOpen && siteId && <SyncDialog kind="rules" fromId={siteId} preselect={[...selected]} onClose={() => setSyncOpen(false)} />}
       </div>
 
       {selected.size > 0 && <BulkBar ids={[...selected]} onDone={() => setSelected(new Set())} />}

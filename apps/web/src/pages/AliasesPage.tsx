@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 import { addAlias, ALIAS_FILTER_FIELDS, aliasRecord, aliasStatus, indexAliases, deleteAlias, findAliasReferences, isLocalId, updateAlias, type Alias } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
 import { FilterInput, useFilter } from "../components/FilterInput.tsx";
+import { SyncDialog } from "../components/SyncDialog.tsx";
 import { AliasForm, RUNTIME_TYPES, type AliasDraft } from "../components/AliasForm.tsx";
 
 const ALIAS_ENV = { fields: ALIAS_FILTER_FIELDS };
 
 export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => void }) {
-  const { wc, edit, notify, validation } = useWorkspace();
+  const { wc, edit, notify, validation, sites, siteId } = useWorkspace();
+  const [syncOpen, setSyncOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
@@ -53,6 +55,12 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
           ))}
         </select>
         <span className="count">{aliases.length} aliases</span>
+        {sites.filter((s) => s.signedIn).length > 1 && siteId && (
+          <button type="button" onClick={() => setSyncOpen(true)} title="Copy aliases to another site (staged there for review)">
+            Sync to site…
+          </button>
+        )}
+        {syncOpen && siteId && <SyncDialog kind="aliases" fromId={siteId} onClose={() => setSyncOpen(false)} />}
         <button type="button" className="primary" onClick={() => setEditingId("new")}>
           + New alias
         </button>

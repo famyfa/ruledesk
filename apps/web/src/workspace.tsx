@@ -53,6 +53,20 @@ function hasChanges(wc: WorkingCopy): boolean {
   return computeChangeSet(wc).changes.length > 0;
 }
 
+/** Save a working copy as this tab's draft (or drop the draft when nothing is staged). */
+function persistDraft(key: string, wc: WorkingCopy) {
+  try {
+    if (hasChanges(wc)) {
+      const p: Persisted = { version: 1, savedAt: new Date().toISOString(), baseline: wc.baseline, current: wc.current };
+      sessionStorage.setItem(key, JSON.stringify(p));
+    } else {
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    /* storage full or unavailable: edits stay in memory */
+  }
+}
+
 /** Re-link current objects to baseline objects where they're equal, so "unchanged" detection by identity works after a reload. */
 function relink(baseline: FirewallSnapshot, current: WorkingCopy["current"]): WorkingCopy["current"] {
   const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -114,6 +128,10 @@ interface WorkspaceValue {
   checkForExternalChanges: () => Promise<void>;
   /** Re-read the firewall and replay staged edits on top. Returns notes about anything dropped. */
   rebaseOntoFirewall: () => Promise<string[] | null>;
+  /** Working copy of any signed-in site: the open one, a staged draft of this tab, or a fresh read. */
+  loadSiteCopy: (id: string) => Promise<WorkingCopy>;
+  /** Stage edits at any site (the open one directly, others as a draft of this tab). Throws on failure. */
+  stageAtSite: (id: string, fn: (wc: WorkingCopy) => WorkingCopy) => Promise<void>;
 }
 
 const Ctx = createContext<WorkspaceValue | null>(null);
@@ -199,17 +217,7 @@ export function WorkspaceProvider({
   // Persist after every change (under the site the working copy belongs to).
   useEffect(() => {
     if (!wc) return;
-    const key = storageKey(session.topologyHash, wc.baseline.firewallId);
-    try {
-      if (hasChanges(wc)) {
-        const p: Persisted = { version: 1, savedAt: new Date().toISOString(), baseline: wc.baseline, current: wc.current };
-        sessionStorage.setItem(key, JSON.stringify(p));
-      } else {
-        sessionStorage.removeItem(key);
-      }
-    } catch {
-      /* storage full or unavailable: edits stay in memory */
-    }
+    persistDraft(storageKey(session.topologyHash, wc.baseline.firewallId), wc);
   }, [wc, session.topologyHash]);
 
   const reload = useCallback(
@@ -286,6 +294,30 @@ export function WorkspaceProvider({
       return null;
     }
   }, [siteId, notify, handleError]);
+
+  const loadSiteCopy = useCallback(
+    async (id: string): Promise<WorkingCopy> => {
+      if (id === siteIdRef.current && wcRef.current) return wcRef.current;
+      const { snapshot } = await api.snapshot(id);
+      const persisted = loadPersisted(storageKey(session.topologyHash, id));
+      return persisted
+        ? { baseline: persisted.baseline, current: relink(persisted.baseline, persisted.current), past: [], future: [] }
+        : createWorkingCopy(snapshot);
+    },
+    [session.topologyHash],
+  );
+
+  const stageAtSite = useCallback(
+    async (id: string, fn: (wc: WorkingCopy) => WorkingCopy) => {
+      if (id === siteIdRef.current && wcRef.current) {
+        if (!edit(fn)) throw new WorkingCopyError("The change could not be staged.");
+        return;
+      }
+      const next = fn(await loadSiteCopy(id));
+      persistDraft(storageKey(session.topologyHash, id), next);
+    },
+    [edit, loadSiteCopy, session.topologyHash],
+  );
 
   const selectSite = useCallback(
     (id: string) => {
@@ -370,6 +402,8 @@ export function WorkspaceProvider({
     reload,
     checkForExternalChanges,
     rebaseOntoFirewall,
+    loadSiteCopy,
+    stageAtSite,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

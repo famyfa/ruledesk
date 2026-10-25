@@ -5,7 +5,7 @@ import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
 
-export type Page = "overview" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
+export type Page = "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 /**
  * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
@@ -24,6 +24,7 @@ const TABS: NavTab[] = [
   { id: "monitor", label: "Monitor", tree: true, pages: [{ page: "monitor", label: "Firewall Log" }] },
   { id: "policies", label: "Policies", tree: true, pages: [{ page: "rules", label: "Firewall Rules" }] },
   { id: "objects", label: "Objects", tree: true, pages: [{ page: "aliases", label: "Aliases" }] },
+  { id: "global", label: "Global", tree: true, pages: [{ page: "global-rules", label: "Rules, all sites" }, { page: "global-aliases", label: "Aliases, all sites" }] },
   { id: "sites", label: "Sites", pages: [{ page: "sites", label: "Sites" }] },
   { id: "changes", label: "Changes", pages: [{ page: "changes", label: "Pending Changes" }] },
   { id: "history", label: "History", pages: [{ page: "history", label: "History" }] },

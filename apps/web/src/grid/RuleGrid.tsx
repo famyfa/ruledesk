@@ -489,6 +489,7 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                         className={[
                           "cell",
                           `col-${col.key}`,
+                          col.key === "description" ? "cell-name" : "",
                           col.sticky ? "sticky" : "",
                           isActive ? "cell-active" : "",
                           modified ? "cell-modified" : "",
@@ -497,6 +498,7 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                         style={col.sticky ? { left: colLeft[ci] } : undefined}
                         onMouseDown={() => onCellMouseDown(vi.index, ci)}
                         onDoubleClick={() => onEdit(rule.id)}
+                        onClick={col.key === "description" ? () => onEdit(rule.id) : undefined}
                       >
                         <div className="cell-content">
                           {col.render(rule, ctx)}

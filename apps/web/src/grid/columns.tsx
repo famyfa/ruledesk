@@ -108,6 +108,19 @@ function parseAddressText(text: string, ctx: ObjectContext): AddressSpec | strin
 
 export const COLUMNS: Column[] = [
   {
+    key: "description",
+    label: "Name",
+    width: 260,
+    sticky: true,
+    editor: "text",
+    field: "description",
+    render: (r) => r.description || <span className="muted">—</span>,
+    copy: (r) => r.description,
+    paste: (t) => ({ description: t.replace(/[\r\n]+/g, " ").trim() }),
+    get: (r) => r.description,
+    set: (v) => ({ description: String(v) }),
+  },
+  {
     key: "enabled",
     label: "On",
     width: 44,
@@ -270,18 +283,6 @@ export const COLUMNS: Column[] = [
     },
     get: (r) => r.destinationPort,
     set: (v) => ({ destinationPort: v as PortSpec }),
-  },
-  {
-    key: "description",
-    label: "Description",
-    width: 260,
-    editor: "text",
-    field: "description",
-    render: (r) => r.description || <span className="muted">—</span>,
-    copy: (r) => r.description,
-    paste: (t) => ({ description: t.replace(/[\r\n]+/g, " ").trim() }),
-    get: (r) => r.description,
-    set: (v) => ({ description: String(v) }),
   },
   {
     key: "log",

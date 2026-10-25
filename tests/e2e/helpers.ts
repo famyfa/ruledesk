@@ -40,9 +40,9 @@ export function cell(page: Page, rowText: string, column: string) {
     .locator(`td.col-${column}`);
 }
 
-/** Open the rule editor dialog for a rule (double-click on its row). */
+/** Open the rule editor dialog for a rule (click on its name). */
 export async function openRule(page: Page, rowText: string) {
-  await cell(page, rowText, "description").dblclick();
+  await cell(page, rowText, "description").click(); // the rule name opens the form
   const dialog = page.getByRole("dialog", { name: "Edit rule" });
   await expect(dialog).toBeVisible();
   return dialog;

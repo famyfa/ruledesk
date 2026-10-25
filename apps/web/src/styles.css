@@ -1754,3 +1754,98 @@ input[aria-invalid="true"] {
 .cell-filter:hover {
   text-decoration: underline dotted;
 }
+
+/* the rule name opens the rule form */
+td.cell-name {
+  cursor: pointer;
+  font-weight: 600;
+}
+td.cell-name:hover .cell-content {
+  text-decoration: underline;
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- sync dialog / global pages */
+.modal.sync-dialog {
+  width: min(1100px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.sync-sites {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+.sync-sites label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sync-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.sync-body section {
+  overflow: auto;
+  min-height: 240px;
+  max-height: 55vh;
+}
+.sync-list ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.sync-list li .checkbox {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.sync-preview h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-base);
+}
+.sync-changes {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+.sync-badge-create {
+  background: #1f7a3d;
+  color: #fff;
+}
+.sync-badge-update {
+  background: #b26a00;
+  color: #fff;
+}
+.sync-badge-blocked {
+  background: #b3261e;
+  color: #fff;
+}
+.sync-badge-same {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.global-table td.cell-same {
+  color: #1f7a3d;
+}
+.global-table td.cell-differs {
+  color: #b26a00;
+  font-weight: 600;
+}
+.global-table td.cell-missing {
+  color: var(--text-muted);
+}

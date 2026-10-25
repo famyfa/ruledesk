@@ -10,3 +10,4 @@ export * from "./risk.ts";
 export * from "./shared.ts";
 export * from "./filter.ts";
 export * from "./filter-records.ts";
+export * from "./sync.ts";
