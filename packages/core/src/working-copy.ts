@@ -174,10 +174,13 @@ export function addRule(
     interfaceNot: anchor?.interfaceNot ?? false,
     ...opts.patch,
   };
-  if (!anchor) rule.prioGroup = derivePrioGroup(rule, wc.baseline.options.interfaces, groupPrioMap(wc.baseline));
+  const derived = derivePrioGroup(rule, wc.baseline.options.interfaces, groupPrioMap(wc.baseline));
+  // Interfaces decide the group; if they put the rule in another group than its anchor, it goes there.
+  const movedGroup = !!anchor && derived !== anchor.prioGroup && ("interfaces" in (opts.patch ?? {}) || "interfaceNot" in (opts.patch ?? {}));
+  if (!anchor || movedGroup) rule.prioGroup = derived;
   const next = commit(wc, {
     ...wc.current,
-    rules: insertAfter(wc.current.rules, opts.afterId, rule),
+    rules: movedGroup ? placeAtEndOfGroup(wc.current.rules, rule) : insertAfter(wc.current.rules, opts.afterId, rule),
     nextLocalId: wc.current.nextLocalId + 1,
   });
   return { wc: next, id };

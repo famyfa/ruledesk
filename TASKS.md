@@ -114,11 +114,11 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [ ] Docs: multi-site operator guide
 
 ## 10. UI rework (feedback 2026-10-25)
-- [ ] Table columns size to their content: min width = longest value in the column (no truncation), horizontal scroll for the rest
-- [ ] Replace inline cell editing with a Panorama/Palo Alto style rule editor: double-click (or Enter) on a row opens a form dialog with tabs (General, Source, Destination, Service/Port, Options/Advanced)
-- [ ] Keep inline alias creation inside the form's source/destination pickers ("Create alias" without leaving the form)
-- [ ] Same form style for aliases (alias editor dialog)
-- [ ] Grid stays for viewing, selecting, reordering, bulk edit, copy/paste; editing happens in the form
+- [x] Table columns size to their content: min width = longest value in the column (no truncation), horizontal scroll for the rest
+- [x] Replace inline cell editing with a Panorama/Palo Alto style rule editor: double-click (or Enter) on a row opens a form dialog with tabs (General, Source, Destination, Service/Port, Options/Advanced)
+- [x] Keep inline alias creation inside the form's source/destination pickers ("Create alias" without leaving the form)
+- [x] Same form style for aliases (alias editor dialog)
+- [x] Grid stays for viewing, selecting, reordering, bulk edit, copy/paste; editing happens in the form
 
 ## 11. Lab findings to finish (2026-10-25)
 - [x] Record real OPNsense differences in docs/api-compatibility.md (get_rule defaults shape, firmware/info shape, unauthenticated API -> 302, TLS session resumption vs pinning)

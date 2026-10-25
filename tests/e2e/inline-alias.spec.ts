@@ -1,117 +1,133 @@
-import { expect, test } from "@playwright/test";
-import { cell, login, mockState, resetMock } from "./helpers.ts";
+import { expect, test, type Page } from "@playwright/test";
+import { cell, login, mockState, newRule, openRule, resetMock, tab } from "./helpers.ts";
 
 /**
  * The core acceptance test from the project book (§10): build a rule and
- * create its destination alias without leaving the rule grid.
+ * create its destination alias without leaving the rule form.
  */
-test.describe("inline alias creation", () => {
+test.describe("inline alias creation (rule form)", () => {
   test.beforeEach(async () => {
     await resetMock();
   });
 
-  test("add a rule and create its destination alias inside the cell", async ({ page }) => {
-    await login(page);
-    const before = await mockState();
-
-    // 1. Add a rule below "Allow web to DMZ".
+  /** Fill the new-rule form: description, TCP/443 and a destination alias created on the spot. */
+  async function buildWebRule(page: Page) {
     await cell(page, "Allow web to DMZ", "description").click();
-    await page.getByRole("button", { name: "+ Add rule" }).click();
-    const newRow = page.getByRole("row").filter({ has: page.getByText("+ NEW") });
-    await expect(newRow).toHaveCount(1);
+    const dialog = await newRule(page);
+    await dialog.getByLabel("Description").fill("Allow HTTPS to web servers");
 
-    // Give it a description (active cell moved to Description; typing starts editing).
-    await page.keyboard.type("Allow HTTPS to web servers");
-    await page.keyboard.press("Enter");
-    const row = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
-    await expect(row).toHaveCount(1);
+    await tab(dialog, "Service");
+    await dialog.getByLabel("Protocol").selectOption("TCP");
+    await dialog.getByLabel("Destination port").fill("443");
+    await dialog.getByLabel("Destination port").press("Enter");
+    await expect(dialog.getByLabel("Destination port")).toHaveValue("443");
 
-    // Protocol TCP so a port is allowed.
-    await row.locator("td.col-protocol").click();
-    await row.locator("td.col-protocol").click();
-    await page.getByRole("combobox", { name: "Choose value" }).selectOption("TCP");
-    await page.keyboard.press("Enter");
-
-    // 2. Click the destination cell and type a new alias name.
-    await row.locator("td.col-destination").click();
-    await row.locator("td.col-destination").click();
-    const picker = page.getByRole("combobox", { name: "Address, network, interface or alias" });
+    // Destination: type a new alias name; the picker offers to create it.
+    await tab(dialog, "Destination");
+    const picker = dialog.getByRole("combobox", { name: "Destination address" });
     await picker.fill("WEB_SERVERS");
-
-    // 3. Autocomplete offers to create the alias.
-    const create = page.getByRole("option", { name: /Create alias "WEB_SERVERS"/ });
+    const create = dialog.getByRole("option", { name: /Create alias "WEB_SERVERS"/ });
     await expect(create).toBeVisible();
     await create.click();
 
-    // 4. The inline popover: name prefilled, add two networks (pasted as lines).
-    const dialog = page.getByRole("dialog", { name: "Create alias" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel("Name")).toHaveValue("WEB_SERVERS");
-    await dialog.getByLabel("Entries").fill("192.168.1.10\n192.168.1.0/28");
-    await expect(dialog.getByText("2 entries")).toBeVisible();
-    await dialog.getByRole("button", { name: "Create & use" }).click();
+    // The alias form opens right there, name prefilled; paste two networks.
+    const aliasForm = page.getByRole("dialog", { name: "Create alias" });
+    await expect(aliasForm).toBeVisible();
+    await expect(aliasForm.getByLabel("Name")).toHaveValue("WEB_SERVERS");
+    await aliasForm.getByLabel("Entries").fill("192.168.1.10\n192.168.1.0/28");
+    await expect(aliasForm.getByText("2 entries")).toBeVisible();
+    await aliasForm.getByRole("button", { name: "Create & use" }).click();
+    await expect(aliasForm).toBeHidden();
+
+    // The new alias is already in the destination field.
+    await expect(dialog.locator(".picker-box .chip-alias", { hasText: "WEB_SERVERS" })).toBeVisible();
+    return dialog;
+  }
+
+  test("create a rule and its destination alias inside the form, review the diff", async ({ page }) => {
+    await login(page);
+    const before = await mockState();
+    const dialog = await buildWebRule(page);
+    await dialog.getByRole("button", { name: "OK", exact: true }).click();
     await expect(dialog).toBeHidden();
 
-    // The cell editor now references the new alias immediately.
-    await expect(page.locator(".picker .chip-alias", { hasText: "WEB_SERVERS" })).toBeVisible();
-
-    // 5. Finish editing the cell (Enter on the empty input commits).
-    await page.keyboard.press("Enter");
+    const row = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByText("+ NEW")).toBeVisible();
     await expect(row.locator("td.col-destination .chip-alias")).toHaveText(/WEB_SERVERS/);
-
-    // Port 443.
-    await row.locator("td.col-destinationPort").click();
-    await page.keyboard.type("443");
-    await page.keyboard.press("Enter");
     await expect(row.locator("td.col-destinationPort")).toHaveText("443");
 
-    // 6. Both objects are in the pending changes list.
+    // Both objects are pending, with a readable diff.
     await page.getByRole("button", { name: /pending/ }).click();
     const drawer = page.getByRole("region", { name: "Pending changes" });
     await expect(drawer.getByRole("tab", { name: "Changes (2)" })).toBeVisible();
+    await expect(drawer.getByRole("tab", { name: "Problems (0)" })).toBeVisible();
     const aliasChange = drawer.locator(".change-create").filter({ has: page.locator(".change-type", { hasText: "Alias" }) });
     const ruleChange = drawer.locator(".change-create").filter({ has: page.locator(".change-type", { hasText: "Rule" }) });
-    await expect(aliasChange).toContainText("WEB_SERVERS");
-    await expect(ruleChange).toContainText("Allow HTTPS to web servers");
-    await expect(drawer.getByRole("tab", { name: "Problems (0)" })).toBeVisible();
-
-    // 7. Review the diff: alias entries and rule destination are readable.
     await expect(aliasChange).toContainText("+ 192.168.1.10");
     await expect(aliasChange).toContainText("+ 192.168.1.0/28");
     await expect(ruleChange).toContainText("WEB_SERVERS");
-    await expect(ruleChange).toContainText("443");
 
-    // Nothing has been sent to the firewall.
+    // Nothing has reached the firewall.
     const after = await mockState();
     expect(after.rules.length).toBe(before.rules.length);
     expect(after.aliases.length).toBe(before.aliases.length);
 
-    // The new alias shows up in autocomplete for another rule right away.
+    // The new alias is offered immediately when editing another rule.
     await page.getByRole("button", { name: /pending/ }).click();
-    const other = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await other.locator("td.col-source").click();
-    await page.keyboard.type("WEB");
-    await expect(page.getByRole("option", { name: /WEB_SERVERS.*pending/ })).toBeVisible();
-    await page.keyboard.press("Escape");
+    const other = await openRule(page, "Block DMZ to LAN");
+    await tab(other, "Source");
+    await other.getByRole("combobox", { name: "Source address" }).fill("WEB");
+    await expect(other.getByRole("option", { name: /WEB_SERVERS.*pending/ })).toBeVisible();
+    await page.keyboard.press("Escape"); // closes the suggestions
+    await other.getByRole("button", { name: "Cancel" }).click();
 
-    // A reload keeps the staged work (local working copy).
+    // A reload keeps the staged work.
     await page.reload();
     await expect(page.getByRole("grid")).toBeVisible();
     await expect(page.getByText(/Restored 2 staged changes/)).toBeVisible();
-    const reloaded = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
-    await expect(reloaded.locator("td.col-destination .chip-alias")).toHaveText(/WEB_SERVERS/);
   });
 
-  test("the user never needs the alias page during this workflow", async ({ page }) => {
+  test("Cancel discards the rule; an alias you explicitly created stays staged (undo removes it)", async ({ page }) => {
     await login(page);
-    // Typing an IP straight into a cell works too, no alias needed.
+    const dialog = await buildWebRule(page);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /1 pending/ })).toBeVisible();
+    await page.getByRole("button", { name: "↶ Undo" }).click();
+    await expect(page.getByRole("button", { name: /0 pending/ })).toBeVisible();
+  });
+
+  test("a literal address needs no alias, and invalid input is flagged on its tab", async ({ page }) => {
+    await login(page);
+    const dialog = await openRule(page, "Block DMZ to LAN");
+    await tab(dialog, "Source");
+    const picker = dialog.getByRole("combobox", { name: "Source address" });
+    await picker.fill("10.20.0.0/16");
+    await picker.press("Enter");
+    await expect(dialog.locator(".picker-box .chip-literal", { hasText: "10.20.0.0/16" })).toBeVisible();
+
+    // A destination port on a rule without TCP/UDP is a problem, shown on the Service tab.
+    await tab(dialog, "Service");
+    await dialog.getByLabel("Protocol").selectOption("ICMP");
+    await tab(dialog, "General");
+    await dialog.getByRole("button", { name: "OK", exact: true }).click();
+    await expect(dialog).toBeHidden(); // no port set, so this is valid
+
     const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await row.locator("td.col-source").click();
-    await page.keyboard.type("10.20.0.0/16");
-    await page.keyboard.press("Enter"); // pick literal
-    await page.keyboard.press("Enter"); // finish
     await expect(row.locator("td.col-source")).toContainText("10.20.0.0/16");
     await expect(row.locator("td.col-source")).toHaveClass(/cell-modified/);
     expect(page.url()).not.toContain("aliases");
+  });
+
+  test("columns are as wide as their content (nothing cut off)", async ({ page }) => {
+    await login(page);
+    const cells = page.locator("td.cell .cell-content");
+    const n = await cells.count();
+    for (let i = 0; i < n; i++) {
+      const clipped = await cells.nth(i).evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      expect(clipped, `cell ${i} is clipped`).toBe(false);
+    }
   });
 });

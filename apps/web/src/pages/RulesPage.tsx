@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
+  addRule,
+  newRuleTemplate,
   addressItemToken,
   changedRuleFields,
   formatAddress,
@@ -13,6 +15,7 @@ import {
 } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
 import { RuleGrid } from "../grid/RuleGrid.tsx";
+import { RuleEditorDialog } from "../forms/RuleEditorDialog.tsx";
 import type { ObjectContext } from "../grid/objects.ts";
 
 interface Filters {
@@ -54,6 +57,7 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(initialActiveId);
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [editor, setEditor] = useState<{ mode: "edit"; id: string } | { mode: "new"; afterId?: string; rule: FirewallRule } | null>(null);
 
   const ctx: ObjectContext | null = useMemo(() => (wc ? { options: wc.baseline.options, aliases: wc.current.aliases } : null), [wc]);
 
@@ -128,6 +132,36 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
 
       {selected.size > 0 && <BulkBar ids={[...selected]} onDone={() => setSelected(new Set())} />}
 
+      {editor && (() => {
+        const rule = editor.mode === "edit" ? wc.current.rules.find((r) => r.id === editor.id) : editor.rule;
+        if (!rule) return null;
+        const position = editor.mode === "edit" ? wc.current.rules.findIndex((r) => r.id === rule.id) + 1 : (wc.current.rules.findIndex((r) => r.id === editor.afterId) + 2 || wc.current.rules.length + 1);
+        return (
+          <RuleEditorDialog
+            key={editor.mode === "edit" ? editor.id : "new"}
+            rule={rule}
+            isNew={editor.mode === "new"}
+            ctx={ctx}
+            position={position}
+            onCancel={() => setEditor(null)}
+            onSave={(patch) => {
+              if (editor.mode === "edit") {
+                if (Object.keys(patch).length) edit((w) => updateRule(w, rule.id, patch));
+              } else {
+                let newId = "";
+                const ok = edit((w) => {
+                  const r = addRule(w, { afterId: editor.afterId, patch: { ...patch, interfaces: patch.interfaces ?? rule.interfaces, interfaceNot: patch.interfaceNot ?? rule.interfaceNot } });
+                  newId = r.id;
+                  return r.wc;
+                });
+                if (ok) setActiveId(newId);
+              }
+              setEditor(null);
+            }}
+          />
+        );
+      })()}
+
       <div className={`rules-main${detailsOpen ? " with-details" : ""}`}>
         <RuleGrid
           rows={rows}
@@ -139,6 +173,12 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
           onInspect={(id) => {
             setActiveId(id);
             setDetailsOpen(true);
+          }}
+          onEdit={(id) => setEditor({ mode: "edit", id })}
+          onAdd={(afterId) => {
+            const anchor = wc.current.rules.find((r) => r.id === afterId);
+            const rule = { ...newRuleTemplate("new", anchor?.prioGroup), interfaces: anchor ? [...anchor.interfaces] : [], interfaceNot: anchor?.interfaceNot ?? false };
+            setEditor({ mode: "new", afterId, rule });
           }}
         />
         {detailsOpen && <DetailsPanel rule={active} ctx={ctx} onEdit={(patch) => active && edit((w) => updateRule(w, active.id, patch))} />}

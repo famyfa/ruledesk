@@ -6,7 +6,7 @@ RuleDeck: spreadsheet-first OPNsense rule editor. The product spec is [Instructi
 
 - `npm run dev`: 2 mock firewalls (8443 Berlin, 8444 Munich) + server (3000) + web (5173). Sign in as `admin / ruledeck-dev` (a mock OPNsense account)
 - `npm test`: Vitest (unit + integration against an in-process mock)
-- `npx playwright test`: E2E against the dev stack
+- `npx playwright test`: E2E on its own stack with the two MOCK firewalls (pinned, never your real config)
 - `npm run typecheck`: all workspaces
 
 ## Structure
@@ -15,7 +15,7 @@ RuleDeck: spreadsheet-first OPNsense rule editor. The product spec is [Instructi
 - `packages/opnsense-client`: HTTP client, zod response schemas, adapter (raw ⇄ domain), version feature flags
 - `apps/server`: Fastify. Stores NOTHING (no DB, no credentials). Users sign in with OPNsense accounts; per-site firewall sessions live in memory (`auth.ts`, `sites.ts`). Sites come from a read-only topology file (`topology.ts`)
 - `apps/mock-opnsense`: mimics OPNsense 26.7 endpoints, `/__mock/*` for test control
-- `apps/web`: React. Grid in `src/grid`, workspace state in `src/workspace.tsx`
+- `apps/web`: React. Grid (view/select/reorder/copy-paste) in `src/grid`; editing happens in dialogs in `src/forms` (rule editor with tabs, alias form); workspace state in `src/workspace.tsx`
 
 ## Rules
 

@@ -92,6 +92,13 @@ describe("planOrdering", () => {
     expect(planOrdering(wc.baseline.rules, wc.current.rules).get(id)).toBe(150);
   });
 
+  it("puts a new rule into the group its interfaces imply, even when added below a rule of another group", () => {
+    const { wc, id } = addRule(base(), { afterId: "a", patch: { interfaces: [] } });
+    const r = wc.current.rules.find((x) => x.id === id)!;
+    expect(r.prioGroup).toBe("200000");
+    expect(wc.current.rules.map((x) => x.id).indexOf(id)).toBe(1); // end of floating group, before interface rules
+  });
+
   it("moves a rule to another group when its interfaces change", () => {
     const wc = updateRule(base(), "f1", { interfaces: ["lan"] });
     expect(wc.current.rules.map((r) => r.id)).toEqual(["a", "b", "c", "f1"]);

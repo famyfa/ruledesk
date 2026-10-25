@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
-import { flushSync } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  addRule,
   batch,
   changedRuleFields,
   cloneRule,
@@ -16,8 +14,8 @@ import {
   type RulePatch,
 } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
-import { COLUMNS, type Column } from "./columns.tsx";
-import { AddressEditor, InterfacesEditor, PortEditor, SelectEditor, TextEditor, type CommitHandle, type MoveAfterCommit } from "./editors.tsx";
+import { COLUMNS } from "./columns.tsx";
+import { measureColumnWidths } from "./widths.ts";
 import type { ObjectContext } from "./objects.ts";
 
 const ROW_HEIGHT = 32;
@@ -40,16 +38,22 @@ export interface RuleGridProps {
   activeId: string | null;
   setActiveId: (id: string | null) => void;
   onInspect: (id: string) => void;
+  /** Open the rule editor dialog for a rule. */
+  onEdit: (id: string) => void;
+  /** Open the rule editor dialog for a new rule (placed after `afterId`). */
+  onAdd: (afterId?: string) => void;
 }
 
-export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActiveId, onInspect }: RuleGridProps) {
+/**
+ * The rule grid: view, select, reorder, bulk actions, copy/paste. Editing a
+ * rule happens in the rule editor dialog (double-click or Enter).
+ */
+export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActiveId, onInspect, onEdit, onAdd }: RuleGridProps) {
   const { wc, edit, notify, validation } = useWorkspace();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState<Cell>(() => ({ row: Math.max(0, rows.findIndex((r) => r.id === activeId)), col: 0 }));
-  const [editing, setEditing] = useState<{ initialText?: string } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
-  const commitHandle: CommitHandle = useRef(null);
   const anchorRow = useRef<number | null>(null);
 
   const allRules = wc?.current.rules ?? [];
@@ -100,21 +104,18 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
 
   const activeRule = rows[cell.row];
 
-  const editingRef = useRef(editing);
-  editingRef.current = editing;
-
   const focusCell = useCallback(() => {
     requestAnimationFrame(() => {
-      // An editor may have opened since this was scheduled; never steal its focus.
-      if (editingRef.current) return;
+      // Don't pull focus out of a dialog that's open on top of the grid.
+      if (document.activeElement?.closest("[role=dialog]")) return;
       const el = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row}:${cell.col}"]`);
       el?.focus({ preventScroll: true });
     });
   }, [cell]);
 
   useEffect(() => {
-    if (!editing) focusCell();
-  }, [cell, editing, focusCell]);
+    focusCell();
+  }, [cell, focusCell]);
 
   const moveTo = useCallback(
     (row: number, col: number) => {
@@ -128,10 +129,9 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
     [rows.length, virtualizer],
   );
 
-  const afterCommitMove = (move: MoveAfterCommit) => {
-    if (move === "down") moveTo(cell.row + 1, cell.col);
-    else if (move === "right") cell.col === COLUMNS.length - 1 ? moveTo(cell.row + 1, 0) : moveTo(cell.row, cell.col + 1);
-    else if (move === "left") cell.col === 0 ? moveTo(cell.row - 1, COLUMNS.length - 1) : moveTo(cell.row, cell.col - 1);
+  const step = (dir: "right" | "left") => {
+    if (dir === "right") cell.col === COLUMNS.length - 1 ? moveTo(cell.row + 1, 0) : moveTo(cell.row, cell.col + 1);
+    else cell.col === 0 ? moveTo(cell.row - 1, COLUMNS.length - 1) : moveTo(cell.row, cell.col - 1);
   };
 
   const readOnly = (rule: FirewallRule | undefined) => {
@@ -141,46 +141,6 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
       return true;
     }
     return false;
-  };
-
-  const applyPatch = (rule: FirewallRule, patch: RulePatch) => edit((w) => updateRule(w, rule.id, patch));
-
-  const startEdit = (initialText?: string) => {
-    const col = COLUMNS[cell.col]!;
-    if (readOnly(activeRule) || !activeRule) return;
-    if (col.editor === "bool") {
-      applyPatch(activeRule, col.set!(!col.get!(activeRule)));
-      return;
-    }
-    if (col.editor === "none") return;
-    // Mount the editor synchronously so the next keystroke already lands in it.
-    editingRef.current = { initialText };
-    flushSync(() => setEditing({ initialText }));
-  };
-
-  const commitEdit = (col: Column, value: unknown, move: MoveAfterCommit) => {
-    if (activeRule) {
-      const before = JSON.stringify(col.get!(activeRule));
-      if (JSON.stringify(value) !== before) applyPatch(activeRule, col.set!(value));
-    }
-    commitHandle.current = null;
-    setEditing(null);
-    afterCommitMove(move);
-  };
-
-  const cancelEdit = () => {
-    commitHandle.current = null;
-    setEditing(null);
-  };
-
-  /** Commit any open editor before moving the active cell with the mouse. */
-  const flushEditor = () => {
-    if (!editing) return true;
-    if (commitHandle.current) {
-      commitHandle.current();
-      return true;
-    }
-    return false; // an alias popover is open; keep editing
   };
 
   // ------------------------------------------------------------- row actions
@@ -206,21 +166,10 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
     }
   };
 
-  const doAdd = () => {
-    let newId = "";
-    if (edit((w) => {
-      const r = addRule(w, { afterId: activeRule?.origin === "mvc" ? activeRule.id : undefined });
-      newId = r.id;
-      return r.wc;
-    })) {
-      setActiveId(newId);
-      setCell((c) => ({ ...c, col: COLUMNS.findIndex((x) => x.key === "description") }));
-    }
-  };
+  const doAdd = () => onAdd(activeRule?.origin === "mvc" ? activeRule.id : undefined);
 
   // ------------------------------------------------------------- keyboard
   const onKeyDown = (e: KeyboardEvent) => {
-    if (editing) return;
     const mod = e.ctrlKey || e.metaKey;
     const { row, col } = cell;
     switch (true) {
@@ -256,13 +205,13 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
         return mod ? moveTo(rows.length - 1, col) : moveTo(row, COLUMNS.length - 1);
       case e.key === "Tab":
         e.preventDefault();
-        return afterCommitMove(e.shiftKey ? "left" : "right");
+        return step(e.shiftKey ? "left" : "right");
       case e.key === "Enter" || e.key === "F2":
         e.preventDefault();
-        return startEdit();
+        if (activeRule) onEdit(activeRule.id);
+        return;
       case e.key === " ":
         e.preventDefault();
-        if (COLUMNS[col]!.editor === "bool") return startEdit();
         if (activeRule) toggleSelect(activeRule.id, e.shiftKey);
         return;
       case e.key === "Delete":
@@ -286,14 +235,6 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
       case e.key === "Escape":
         if (selected.size) setSelected(new Set());
         return;
-      case !mod && !e.altKey && e.key.length === 1: {
-        const kind = COLUMNS[col]!.editor;
-        if (kind === "text" || kind === "address" || kind === "port") {
-          e.preventDefault();
-          startEdit(e.key);
-        }
-        return;
-      }
     }
   };
 
@@ -311,7 +252,6 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
 
   // ------------------------------------------------------------- clipboard
   const onCopy = (e: ClipboardEvent) => {
-    if (editing) return;
     e.preventDefault();
     let text: string;
     if (selected.size > 1) {
@@ -324,7 +264,6 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
   };
 
   const onPaste = (e: ClipboardEvent) => {
-    if (editing) return;
     e.preventDefault();
     const text = e.clipboardData.getData("text/plain").replace(/\r/g, "").replace(/\n$/, "");
     if (!text) return;
@@ -386,46 +325,10 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
   // ------------------------------------------------------------- render
   const issuesFor = (id: string): FieldIssues | undefined => validation?.rules[id];
 
-  const renderEditor = (col: Column, rule: FirewallRule) => {
-    const common = {
-      onCommit: (v: unknown, move: MoveAfterCommit) => commitEdit(col, v, move),
-      onCancel: cancelEdit,
-      commitHandle,
-      initialText: editing?.initialText,
-    };
-    switch (col.editor) {
-      case "text":
-        return <TextEditor {...common} value={col.get!(rule) as string} />;
-      case "select":
-        return <SelectEditor {...common} value={col.get!(rule) as string} options={col.selectOptions!(ctx, rule)} />;
-      case "address":
-        return <AddressEditor {...common} value={col.get!(rule) as never} ctx={ctx} />;
-      case "port":
-        return <PortEditor {...common} value={col.get!(rule) as never} ctx={ctx} />;
-      case "interfaces":
-        return <InterfacesEditor {...common} value={col.get!(rule) as string[]} ctx={ctx} />;
-      default:
-        return null;
-    }
-  };
+  const onCellMouseDown = (rowIdx: number, colIdx: number) => setCell({ row: rowIdx, col: colIdx });
 
-  const onCellMouseDown = (e: MouseEvent, rowIdx: number, colIdx: number) => {
-    if (editing && rowIdx === cell.row && colIdx === cell.col) return;
-    if (!flushEditor()) return;
-    if (rowIdx === cell.row && colIdx === cell.col && !editing && e.detail === 1) {
-      // Second click on the active cell edits it.
-      e.preventDefault();
-      startEdit();
-      return;
-    }
-    setCell({ row: rowIdx, col: colIdx });
-    const col = COLUMNS[colIdx]!;
-    const rule = rows[rowIdx];
-    if (col.editor === "bool" && rule && rule.origin === "mvc") {
-      e.preventDefault();
-      applyPatch(rule, col.set!(!col.get!(rule)));
-    }
-  };
+  // Columns are as wide as their longest content (header included), so nothing is cut off.
+  const widths = useMemo(() => measureColumnWidths(COLUMNS, rows, ctx), [rows, ctx]);
 
   let left = 0;
   const leadLeft = LEAD.map((c) => {
@@ -433,17 +336,17 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
     left += c.width;
     return l;
   });
-  const colLeft = COLUMNS.map((c) => {
+  const colLeft = COLUMNS.map((c, i) => {
     if (!c.sticky) return undefined;
     const l = left;
-    left += c.width;
+    left += widths[i]!;
     return l;
   });
 
   const items = virtualizer.getVirtualItems();
   const padTop = items[0]?.start ?? 0;
   const padBottom = virtualizer.getTotalSize() - (items.at(-1)?.end ?? 0);
-  const totalWidth = LEAD.reduce((s, c) => s + c.width, 0) + COLUMNS.reduce((s, c) => s + c.width, 0) + 150;
+  const totalWidth = LEAD.reduce((s, c) => s + c.width, 0) + widths.reduce((s, w) => s + w, 0) + 150;
 
   if (!wc) return null;
 
@@ -455,7 +358,7 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
         </button>
         {activeRule && (
           <span className="hint">
-            Click a cell, then click again or type to edit · Enter/Tab commit · Esc cancels · Ctrl+D clone · Alt+↑/↓ move · Del delete · Ctrl+Z undo
+            Double-click or Enter to edit · Ctrl+D clone · Alt+↑/↓ move · Del delete · Ctrl+C/V copy/paste · Ctrl+Z undo
           </span>
         )}
       </div>
@@ -474,8 +377,8 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
             {LEAD.map((c) => (
               <col key={c.key} style={{ width: c.width }} />
             ))}
-            {COLUMNS.map((c) => (
-              <col key={c.key} style={{ width: c.width }} />
+            {COLUMNS.map((c, i) => (
+              <col key={c.key} style={{ width: widths[i] }} />
             ))}
             <col style={{ width: 150 }} />
           </colgroup>
@@ -572,7 +475,6 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                   </td>
                   {COLUMNS.map((col, ci) => {
                     const isActive = vi.index === cell.row && ci === cell.col;
-                    const isEditing = isActive && !!editing;
                     const fieldIssues = col.field ? issues?.[col.field] : undefined;
                     const modified = col.field ? changed.has(col.field) : false;
                     return (
@@ -589,26 +491,21 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                           `col-${col.key}`,
                           col.sticky ? "sticky" : "",
                           isActive ? "cell-active" : "",
-                          isEditing ? "cell-editing" : "",
                           modified ? "cell-modified" : "",
                           fieldIssues ? "cell-invalid" : "",
                         ].join(" ")}
                         style={col.sticky ? { left: colLeft[ci] } : undefined}
-                        onMouseDown={(e) => onCellMouseDown(e, vi.index, ci)}
-                        onDoubleClick={() => !isEditing && startEdit()}
+                        onMouseDown={() => onCellMouseDown(vi.index, ci)}
+                        onDoubleClick={() => onEdit(rule.id)}
                       >
-                        {isEditing ? (
-                          renderEditor(col, rule)
-                        ) : (
-                          <div className="cell-content">
-                            {col.render(rule, ctx)}
-                            {fieldIssues && (
-                              <span className="cell-issue" aria-label={fieldIssues.join(" ")}>
-                                ⚠
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        <div className="cell-content">
+                          {col.render(rule, ctx)}
+                          {fieldIssues && (
+                            <span className="cell-issue" aria-label={fieldIssues.join(" ")}>
+                              ⚠
+                            </span>
+                          )}
+                        </div>
                       </td>
                     );
                   })}

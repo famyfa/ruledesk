@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { MOCK, resetMock } from "./helpers.ts";
+import { MOCK, resetMock, turnLogOn } from "./helpers.ts";
 
 test.describe("signing in with OPNsense accounts", () => {
   test.beforeEach(async () => {
@@ -37,7 +37,7 @@ test.describe("signing in with OPNsense accounts", () => {
     await page.getByLabel("Password").fill("ruledeck-dev");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await row.locator("td.col-log").click();
+    await turnLogOn(page, "Block DMZ to LAN");
     await expect(row.locator("td.col-log")).toHaveClass(/cell-modified/);
 
     await fetch(`${MOCK}/__mock/expire-sessions`, { method: "POST" });
@@ -57,8 +57,7 @@ test.describe("signing in with OPNsense accounts", () => {
     await page.getByLabel("Username").fill("admin");
     await page.getByLabel("Password").fill("ruledeck-dev");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await row.locator("td.col-log").click();
+    await turnLogOn(page, "Block DMZ to LAN");
     expect(await page.evaluate(() => Object.keys(sessionStorage).some((k) => k.startsWith("ruledeck.wc.")))).toBe(true);
     await page.getByRole("button", { name: "Sign out" }).click();
     // Staged work exists, so RuleDeck asks first.
@@ -72,8 +71,7 @@ test.describe("signing in with OPNsense accounts", () => {
     await page.getByLabel("Username").fill("admin");
     await page.getByLabel("Password").fill("ruledeck-dev");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await row.locator("td.col-log").click();
+    await turnLogOn(page, "Block DMZ to LAN");
     await expect(page.getByRole("button", { name: /1 pending/ })).toBeVisible();
 
     await context.clearCookies(); // same effect as the server forgetting the session

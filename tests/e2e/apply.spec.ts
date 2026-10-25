@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cell, login, MOCK, mockState, resetMock } from "./helpers.ts";
+import { cell, login, MOCK, mockState, newRule, resetMock, tab, turnLogOn } from "./helpers.ts";
 
 /**
  * Full acceptance flow from the project book (§10), including apply,
@@ -13,28 +13,24 @@ test.describe("apply to firewall", () => {
   test("add rule + inline alias → review → apply → reload → still linked", async ({ page }) => {
     await login(page);
 
-    // Add a rule with a description and TCP.
+    // Add a rule in the form: description, TCP/443, destination alias created on the spot.
     await cell(page, "Allow web to DMZ", "description").click();
-    await page.getByRole("button", { name: "+ Add rule" }).click();
-    await page.keyboard.type("Allow HTTPS to web servers");
-    await page.keyboard.press("Enter");
-    const row = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
-    await row.locator("td.col-protocol").click();
-    await row.locator("td.col-protocol").click();
-    await page.getByRole("combobox", { name: "Choose value" }).selectOption("TCP");
-    await page.keyboard.press("Enter");
-
-    // Destination: create the alias inline with two network entries.
-    await row.locator("td.col-destination").click();
-    await page.keyboard.type("WEB_SERVERS");
-    await page.getByRole("option", { name: /Create alias "WEB_SERVERS"/ }).click();
+    const form = await newRule(page);
+    await form.getByLabel("Description").fill("Allow HTTPS to web servers");
+    await tab(form, "Service");
+    await form.getByLabel("Protocol").selectOption("TCP");
+    await form.getByLabel("Destination port").fill("443");
+    await form.getByLabel("Destination port").press("Enter");
+    await tab(form, "Destination");
+    await form.getByRole("combobox", { name: "Destination address" }).fill("WEB_SERVERS");
+    await form.getByRole("option", { name: /Create alias "WEB_SERVERS"/ }).click();
     const dialog = page.getByRole("dialog", { name: "Create alias" });
     await dialog.getByLabel("Entries").fill("192.168.1.10\n192.168.1.11");
     await dialog.getByRole("button", { name: "Create & use" }).click();
-    await page.keyboard.press("Enter");
-    await row.locator("td.col-destinationPort").click();
-    await page.keyboard.type("443");
-    await page.keyboard.press("Enter");
+    await form.getByRole("button", { name: "OK", exact: true }).click();
+    await expect(form).toBeHidden();
+    const row = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
+    await expect(row).toHaveCount(1);
 
     // Review and apply.
     await page.getByRole("button", { name: "Review & apply", exact: true }).click();
@@ -79,7 +75,7 @@ test.describe("apply to firewall", () => {
   test("a change made elsewhere is detected and nothing is overwritten", async ({ page }) => {
     await login(page);
     const row = page.getByRole("row").filter({ hasText: "Block DMZ to LAN" });
-    await row.locator("td.col-log").click(); // toggle logging on
+    await turnLogOn(page, "Block DMZ to LAN");
     await expect(row.locator("td.col-log")).toHaveClass(/cell-modified/);
 
     // Another admin edits the same rule in the native UI.

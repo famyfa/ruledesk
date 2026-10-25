@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { addAlias, aliasStatus, deleteAlias, findAliasReferences, isLocalId, updateAlias, type Alias } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
 import { AliasForm, RUNTIME_TYPES, type AliasDraft } from "../components/AliasForm.tsx";
@@ -53,17 +54,16 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
       </div>
 
       {editingId === "new" && (
-        <div className="inline-panel">
-          <h3>New alias</h3>
+        <AliasDialog title="New alias" onCancel={() => setEditingId(null)}>
           <AliasForm
             initial={{ name: "", type: "host", entries: [], description: "" }}
             types={types}
             existingNames={names}
-            submitLabel="Create alias"
+            submitLabel="OK"
             onSave={(d) => save(null, d)}
             onCancel={() => setEditingId(null)}
           />
-        </div>
+        </AliasDialog>
       )}
 
       <div className="table-scroll">
@@ -136,7 +136,7 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
                       )}
                     </td>
                     <td className="row-actions">
-                      <button type="button" onClick={() => setEditingId(editingId === a.id ? null : a.id)}>
+                      <button type="button" onClick={() => setEditingId(a.id)}>
                         Edit
                       </button>
                       <button type="button" className="danger" onClick={() => setConfirmDelete(a.id)}>
@@ -182,23 +182,18 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
                     </tr>
                   )}
                   {editingId === a.id && (
-                    <tr>
-                      <td />
-                      <td colSpan={6}>
-                        <div className="inline-panel">
-                          <AliasForm
-                            initial={{ name: a.name, type: a.type, entries: a.entries, description: a.description }}
-                            types={types}
-                            existingNames={names}
-                            ownName={a.name}
-                            submitLabel="Save alias"
-                            referenceNote={refs.rules.length ? `Used by ${refs.rules.length} rule(s). Renaming updates them.` : undefined}
-                            onSave={(d) => save(a, d)}
-                            onCancel={() => setEditingId(null)}
-                          />
-                        </div>
-                      </td>
-                    </tr>
+                    <AliasDialog title={`Edit alias ${a.name}`} onCancel={() => setEditingId(null)}>
+                      <AliasForm
+                        initial={{ name: a.name, type: a.type, entries: a.entries, description: a.description }}
+                        types={types}
+                        existingNames={names}
+                        ownName={a.name}
+                        submitLabel="OK"
+                        referenceNote={refs.rules.length ? `Used by ${refs.rules.length} rule(s). Renaming updates them.` : undefined}
+                        onSave={(d) => save(a, d)}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    </AliasDialog>
                   )}
                 </Fragment>
               );
@@ -223,5 +218,18 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
         </table>
       </div>
     </div>
+  );
+}
+
+/** Modal dialog around the alias form (same style as the rule editor). */
+function AliasDialog({ title, onCancel, children }: { title: string; onCancel: () => void; children: ReactNode }) {
+  return createPortal(
+    <div className="modal-backdrop" onKeyDown={(e) => e.key === "Escape" && onCancel()}>
+      <div className="modal alias-dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <h2>{title}</h2>
+        {children}
+      </div>
+    </div>,
+    document.body,
   );
 }

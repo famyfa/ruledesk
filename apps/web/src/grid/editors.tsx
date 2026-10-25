@@ -135,7 +135,7 @@ interface Chip {
   alias?: Alias;
 }
 
-function SuggestionList({
+export function SuggestionList({
   listId,
   suggestions,
   highlight,
@@ -200,7 +200,7 @@ interface AliasDialog {
 }
 
 /** Inline create/edit alias popover, used from inside a cell editor. */
-function useAliasDialog(kind: "address" | "port", onCreated: (name: string) => void, onRenamed: (from: string, to: string) => void) {
+export function useAliasDialog(kind: "address" | "port", onCreated: (name: string) => void, onRenamed: (from: string, to: string) => void) {
   const { wc, edit, notify } = useWorkspace();
   const [dialog, setDialog] = useState<AliasDialog | null>(null);
   const types = useMemo(() => {

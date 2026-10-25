@@ -39,3 +39,30 @@ export function cell(page: Page, rowText: string, column: string) {
     .filter({ hasText: rowText })
     .locator(`td.col-${column}`);
 }
+
+/** Open the rule editor dialog for a rule (double-click on its row). */
+export async function openRule(page: Page, rowText: string) {
+  await cell(page, rowText, "description").dblclick();
+  const dialog = page.getByRole("dialog", { name: "Edit rule" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+/** Open the dialog for a new rule (below the active row). */
+export async function newRule(page: Page) {
+  await page.getByRole("button", { name: "+ Add rule" }).click();
+  const dialog = page.getByRole("dialog", { name: "New rule" });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+export const tab = (dialog: ReturnType<Page["locator"]>, name: string) => dialog.getByRole("tab", { name: new RegExp(`^${name}`) }).click();
+
+/** Stage a change through the form: switch logging on for a rule. */
+export async function turnLogOn(page: Page, rowText: string) {
+  const dialog = await openRule(page, rowText);
+  await tab(dialog, "Actions");
+  await dialog.getByLabel("Log packets that match this rule").check();
+  await dialog.getByRole("button", { name: "OK", exact: true }).click();
+  await expect(dialog).toBeHidden();
+}
