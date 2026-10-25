@@ -116,3 +116,16 @@ describe("alias entries", () => {
     expect(validateAliasEntries("geoip", [])).toEqual([]);
   });
 });
+
+describe("untouched objects after a JSON round trip (server side)", () => {
+  it("a broken but untouched rule isn't reported, even when the objects are copies", async () => {
+    const { validateWorkingState } = await import("./rule-validation.ts");
+    const { rule, snapshot } = await import("./test-fixtures.ts");
+    const base = snapshot([rule("r1", { interfaces: ["gone-interface"] }), rule("r2")]);
+    const copy = JSON.parse(JSON.stringify(base)) as typeof base; // like the server gets it
+    const report = validateWorkingState({ rules: copy.rules, aliases: copy.aliases, nextLocalId: 1 }, base.options, base);
+    expect(report.errorCount).toBe(0);
+    const touched = validateWorkingState({ rules: [{ ...copy.rules[0]!, description: "changed" }, copy.rules[1]!], aliases: [], nextLocalId: 1 }, base.options, base);
+    expect(touched.errorCount).toBeGreaterThan(0);
+  });
+});

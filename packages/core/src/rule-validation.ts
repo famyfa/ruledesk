@@ -99,12 +99,16 @@ export function validateWorkingState(
   baseline?: { aliases: Alias[]; rules: FirewallRule[] },
 ): ValidationReport {
   const byName = new Map(state.aliases.map((a) => [a.name, a]));
-  const untouched = new Set<Alias>(baseline?.aliases ?? []);
-  const untouchedRules = new Set<FirewallRule>(baseline?.rules ?? []);
+  // "Untouched" = equal to the baseline object with the same id. Compared by content, not identity,
+  // because the server receives the working copy as JSON.
+  const baseAliases = new Map((baseline?.aliases ?? []).map((a) => [a.id, JSON.stringify(a)]));
+  const baseRules = new Map((baseline?.rules ?? []).map((r) => [r.id, JSON.stringify(r)]));
+  const isUntouchedRule = (r: FirewallRule) => baseRules.get(r.id) === JSON.stringify(r);
+  const isUntouchedAlias = (a: Alias) => baseAliases.get(a.id) === JSON.stringify(a);
   const report: ValidationReport = { rules: {}, aliases: {}, errorCount: 0 };
   for (const r of state.rules) {
     let issues = validateRule(r, byName, options);
-    if (untouchedRules.has(r)) {
+    if (isUntouchedRule(r)) {
       // Only surface broken alias references on rules the user didn't touch.
       issues = Object.fromEntries(
         Object.entries(issues)
@@ -118,7 +122,7 @@ export function validateWorkingState(
     }
   }
   for (const a of state.aliases) {
-    if (untouched.has(a)) continue;
+    if (isUntouchedAlias(a)) continue;
     const issues = validateAlias(a, state);
     if (Object.keys(issues).length) {
       report.aliases[a.id] = issues;

@@ -148,6 +148,31 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
   );
 }
 
+/** The problems the server found (it validates against the live firewall, so they can differ from the ones shown while editing). */
+function ValidationList({ validation, onShowRule }: { validation: NonNullable<ApplyResult["validation"]>; onShowRule: (id: string) => void }) {
+  const { wc } = useWorkspace();
+  const ruleName = (id: string) => wc?.current.rules.find((r) => r.id === id)?.description || id;
+  const aliasName = (id: string) => wc?.current.aliases.find((a) => a.id === id)?.name || id;
+  return (
+    <ul className="conflict-list" aria-label="Problems found">
+      {Object.entries(validation.rules).map(([id, issues]) => (
+        <li key={`r${id}`}>
+          Rule{" "}
+          <button type="button" className="link-button" onClick={() => onShowRule(id)}>
+            {ruleName(id)}
+          </button>
+          : {Object.values(issues).flat().join(" ")}
+        </li>
+      ))}
+      {Object.entries(validation.aliases).map(([id, issues]) => (
+        <li key={`a${id}`}>
+          Alias <strong>{aliasName(id)}</strong>: {Object.values(issues).flat().join(" ")}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const STATUS_LABEL = { done: "DONE", failed: "FAILED", skipped: "SKIPPED" } as const;
 
 function ApplyResultView({
@@ -195,6 +220,7 @@ function ApplyResultView({
           ))}
         </ol>
       )}
+      {result.validation && result.outcome === "invalid" && <ValidationList validation={result.validation} onShowRule={onShowRule} />}
       {result.conflicts && (
         <>
           <ul className="conflict-list">
