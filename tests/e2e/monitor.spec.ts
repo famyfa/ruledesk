@@ -51,25 +51,56 @@ test.describe("Monitor: firewall log", () => {
     await expect(page.locator("table.log-table tbody tr")).toHaveCount(31);
   });
 
-  test("filters by action and by text; Clear starts again", async ({ page }) => {
+  test("filters with Panorama-style expressions; Clear starts again", async ({ page }) => {
     await login(page);
     await openMonitor(page);
     const rows = page.locator("table.log-table tbody tr");
+    const box = page.getByRole("searchbox", { name: "Filter log" });
     await expect(rows).toHaveCount(30);
-    await page.getByRole("combobox", { name: "Action filter" }).selectOption("block");
+    await box.fill("action eq block");
     const blocked = await rows.count();
     expect(blocked).toBeGreaterThan(0);
     expect(blocked).toBeLessThan(30);
     await expect(rows.locator(".action-pass")).toHaveCount(0);
-    await page.getByRole("combobox", { name: "Action filter" }).selectOption("");
-    await page.getByRole("searchbox", { name: "Filter log" }).fill("Block DMZ");
+    // network containment, not only exact addresses
+    await box.fill("addr.src in 192.168.1.0/27");
+    await expect(rows.first()).toBeVisible();
+    for (const t of await rows.locator("td:nth-child(6)").allTextContents()) expect(t).toMatch(/^192\.168\.1\.(\d|[12]\d|3[01]):/);
+    await box.fill("Block DMZ");
     await expect(rows.first()).toContainText("Block DMZ to LAN");
     await expect(page.locator(".monitor-page .count")).toContainText(/ of 30 lines/);
-    await page.getByRole("searchbox", { name: "Filter log" }).fill("zzz-no-such-thing");
+    await box.fill("zzz-no-such-thing");
     await expect(page.getByText("No lines match the filter.")).toBeVisible();
-    await page.getByRole("searchbox", { name: "Filter log" }).fill("");
-    await page.getByRole("button", { name: "Clear" }).click();
+    await box.fill("( action eq");
+    await expect(page.getByRole("alert").filter({ hasText: /parenthesis|value/ })).toBeVisible();
+    await box.fill("");
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
     await expect(rows).toHaveCount(30); // reloaded from the newest lines
+  });
+
+  test("clicking a value adds it to the filter; Shift+click excludes it", async ({ page }) => {
+    await login(page);
+    await openMonitor(page);
+    const rows = page.locator("table.log-table tbody tr");
+    const box = page.getByRole("searchbox", { name: "Filter log" });
+    await expect(rows).toHaveCount(30);
+    await rows.first().locator(".action").click();
+    await expect(box).toHaveValue(/^\( action eq (pass|block) \)$/);
+    const first = await rows.count();
+    expect(first).toBeLessThan(30);
+    await box.fill("");
+    await rows.first().locator(".action").click({ modifiers: ["Shift"] });
+    await expect(box).toHaveValue(/action neq/);
+  });
+
+  test("typing a field name suggests fields and operators", async ({ page }) => {
+    await login(page);
+    await openMonitor(page);
+    const box = page.getByRole("searchbox", { name: "Filter log" });
+    await box.fill("addr.s");
+    await expect(page.getByRole("option", { name: /addr\.src/ })).toBeVisible();
+    await box.fill("addr.src ");
+    await expect(page.getByRole("option", { name: /^in / })).toBeVisible();
   });
 
   test("a log line links to its rule in Policies", async ({ page }) => {

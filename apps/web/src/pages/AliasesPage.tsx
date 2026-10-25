@@ -1,8 +1,11 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { addAlias, aliasStatus, deleteAlias, findAliasReferences, isLocalId, updateAlias, type Alias } from "@ruledeck/core";
+import { addAlias, ALIAS_FILTER_FIELDS, aliasRecord, aliasStatus, indexAliases, deleteAlias, findAliasReferences, isLocalId, updateAlias, type Alias } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
+import { FilterInput, useFilter } from "../components/FilterInput.tsx";
 import { AliasForm, RUNTIME_TYPES, type AliasDraft } from "../components/AliasForm.tsx";
+
+const ALIAS_ENV = { fields: ALIAS_FILTER_FIELDS };
 
 export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => void }) {
   const { wc, edit, notify, validation } = useWorkspace();
@@ -11,14 +14,16 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const filter = useFilter(query, ALIAS_ENV);
+
   const aliases = useMemo(() => {
     if (!wc) return [];
-    const q = query.toLowerCase();
+    const index = indexAliases(wc.current.aliases);
     return wc.current.aliases
       .filter((a) => !typeFilter || a.type === typeFilter)
-      .filter((a) => !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.entries.some((e) => e.toLowerCase().includes(q)))
+      .filter((a) => filter.empty || filter.test(aliasRecord(a, index)))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [wc, query, typeFilter]);
+  }, [wc, filter, typeFilter]);
 
   if (!wc) return null;
   const types = wc.baseline.options.aliasTypes.filter((t) => t.value !== "internal");
@@ -38,7 +43,7 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
   return (
     <div className="aliases-page">
       <div className="filter-bar">
-        <input type="search" placeholder="Search aliases, entries…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search aliases" />
+        <FilterInput value={query} onChange={setQuery} fields={ALIAS_FILTER_FIELDS} error={filter.error} label="Search aliases" placeholder="Filter: web  or  ( addr in 10.1.0.0/16 ) and ( type eq network )" />
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type filter">
           <option value="">All types</option>
           {types.map((t) => (

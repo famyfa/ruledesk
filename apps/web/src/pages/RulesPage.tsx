@@ -3,8 +3,9 @@ import {
   addRule,
   newRuleTemplate,
   changedRuleFields,
-  formatAddress,
-  formatPort,
+  indexAliases,
+  ruleRecord,
+  RULE_FILTER_FIELDS,
   RULE_ACTIONS,
   updateRule,
   updateRules,
@@ -13,6 +14,7 @@ import {
   type RulePatch,
 } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
+import { FilterInput, useFilter } from "../components/FilterInput.tsx";
 import { RuleGrid } from "../grid/RuleGrid.tsx";
 import { RuleEditorDialog } from "../forms/RuleEditorDialog.tsx";
 import type { ObjectContext } from "../grid/objects.ts";
@@ -27,29 +29,6 @@ interface Filters {
 
 const EMPTY: Filters = { text: "", iface: "", action: "", protocol: "", changedOnly: false };
 
-function matchesText(r: FirewallRule, q: string, ctx: ObjectContext): boolean {
-  const hay = [
-    r.description,
-    r.action,
-    r.protocol,
-    r.interfaces.join(" "),
-    formatAddress(r.source),
-    formatAddress(r.destination),
-    formatPort(r.sourcePort),
-    formatPort(r.destinationPort),
-  ];
-  // Also match addresses inside referenced aliases.
-  for (const i of [...r.source.items, ...r.destination.items]) {
-    if (i.kind === "alias") hay.push(ctx.aliases.find((a) => a.name === i.name)?.entries.join(" ") ?? "");
-  }
-  const text = hay.join(" ").toLowerCase();
-  return q
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((t) => text.includes(t));
-}
-
 export function RulesPage({ initialActiveId = null }: { initialActiveId?: string | null }) {
   const { wc, edit } = useWorkspace();
   const [filters, setFilters] = useState<Filters>(EMPTY);
@@ -63,18 +42,31 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
 
   const ctx: ObjectContext | null = useMemo(() => (wc ? { options: wc.baseline.options, aliases: wc.current.aliases } : null), [wc]);
 
+  const env = useMemo(
+    () => ({
+      fields: RULE_FILTER_FIELDS,
+      portNames: new Map((wc?.baseline.options.wellKnownPorts ?? []).flatMap((p) => {
+        const n = /\((\d+)\)/.exec(p.label);
+        return n ? [[p.value.toLowerCase(), Number(n[1])] as [string, number]] : [];
+      })),
+    }),
+    [wc?.baseline.options.wellKnownPorts],
+  );
+  const filter = useFilter(filters.text, env);
+
   const rows = useMemo(() => {
     if (!wc || !ctx) return [];
+    const aliasIndex = indexAliases(wc.current.aliases);
     return wc.current.rules.filter((r) => {
       if (filters.iface === "__floating" && r.interfaces.length === 1 && !r.interfaceNot) return false;
       if (filters.iface && filters.iface !== "__floating" && r.interfaces.length > 0 && !r.interfaces.includes(filters.iface)) return false;
       if (filters.action && r.action !== filters.action) return false;
       if (filters.protocol && r.protocol !== filters.protocol) return false;
       if (filters.changedOnly && changedRuleFields(wc, r).size === 0 && wc.baseline.rules.some((b) => b.id === r.id)) return false;
-      if (filters.text && !matchesText(r, filters.text, ctx)) return false;
+      if (!filter.empty && !filter.test(ruleRecord(r, aliasIndex))) return false;
       return true;
     });
-  }, [wc, ctx, filters]);
+  }, [wc, ctx, filters, filter]);
 
   if (!wc || !ctx) return null;
   const activeFilters = Object.entries(filters).filter(([, v]) => v).length;
@@ -82,13 +74,7 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
   return (
     <div className="rules-page">
       <div className="filter-bar" role="search">
-        <input
-          type="search"
-          placeholder="Filter rules: text, address, alias, port…"
-          value={filters.text}
-          onChange={(e) => setFilters({ ...filters, text: e.target.value })}
-          aria-label="Filter rules"
-        />
+        <FilterInput value={filters.text} onChange={(v) => setFilters({ ...filters, text: v })} fields={RULE_FILTER_FIELDS} error={filter.error} label="Filter rules" />
         <select value={filters.iface} onChange={(e) => setFilters({ ...filters, iface: e.target.value })} aria-label="Interface filter">
           <option value="">All interfaces</option>
           <option value="__floating">Floating only</option>
