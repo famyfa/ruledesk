@@ -1849,3 +1849,7 @@ td.cell-name:hover .cell-content {
 .global-table td.cell-missing {
   color: var(--text-muted);
 }
+.rule-grid td.cell.cell-name,
+.rule-grid td.cell.cell-name .cell-content {
+  cursor: pointer;
+}
