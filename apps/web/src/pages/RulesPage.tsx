@@ -1,16 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   addRule,
   newRuleTemplate,
-  addressItemToken,
   changedRuleFields,
   formatAddress,
   formatPort,
   RULE_ACTIONS,
-  ruleFieldChanges,
   updateRule,
   updateRules,
   type FirewallRule,
+  type WorkingCopy,
   type RulePatch,
 } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
@@ -56,8 +55,11 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(initialActiveId);
-  const [detailsOpen, setDetailsOpen] = useState(true);
-  const [editor, setEditor] = useState<{ mode: "edit"; id: string } | { mode: "new"; afterId?: string; rule: FirewallRule } | null>(null);
+  // `opened` is the working copy as it was when the form opened, so Cancel can undo
+  // everything done inside the form (including aliases created there).
+  const [editor, setEditor] = useState<
+    ({ mode: "edit"; id: string } | { mode: "new"; afterId?: string; rule: FirewallRule }) & { opened: WorkingCopy }
+  | null>(null);
 
   const ctx: ObjectContext | null = useMemo(() => (wc ? { options: wc.baseline.options, aliases: wc.current.aliases } : null), [wc]);
 
@@ -75,7 +77,6 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
   }, [wc, ctx, filters]);
 
   if (!wc || !ctx) return null;
-  const active = wc.current.rules.find((r) => r.id === activeId) ?? null;
   const activeFilters = Object.entries(filters).filter(([, v]) => v).length;
 
   return (
@@ -125,9 +126,6 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
         <span className="count">
           {rows.length} of {wc.current.rules.length} rules
         </span>
-        <button type="button" className="ghost" onClick={() => setDetailsOpen((o) => !o)} aria-pressed={detailsOpen}>
-          {detailsOpen ? "Hide details" : "Show details"}
-        </button>
       </div>
 
       {selected.size > 0 && <BulkBar ids={[...selected]} onDone={() => setSelected(new Set())} />}
@@ -143,7 +141,11 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
             isNew={editor.mode === "new"}
             ctx={ctx}
             position={position}
-            onCancel={() => setEditor(null)}
+            onCancel={() => {
+              // Undo anything done in the form, such as aliases created or edited there.
+              if (wc !== editor.opened) edit(() => editor.opened);
+              setEditor(null);
+            }}
             onSave={(patch) => {
               if (editor.mode === "edit") {
                 if (Object.keys(patch).length) edit((w) => updateRule(w, rule.id, patch));
@@ -162,7 +164,7 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
         );
       })()}
 
-      <div className={`rules-main${detailsOpen ? " with-details" : ""}`}>
+      <div className="rules-main">
         <RuleGrid
           rows={rows}
           ctx={ctx}
@@ -170,18 +172,14 @@ export function RulesPage({ initialActiveId = null }: { initialActiveId?: string
           setSelected={setSelected}
           activeId={activeId}
           setActiveId={setActiveId}
-          onInspect={(id) => {
-            setActiveId(id);
-            setDetailsOpen(true);
-          }}
-          onEdit={(id) => setEditor({ mode: "edit", id })}
+          onInspect={(id) => setEditor({ mode: "edit", id, opened: wc })}
+          onEdit={(id) => setEditor({ mode: "edit", id, opened: wc })}
           onAdd={(afterId) => {
             const anchor = wc.current.rules.find((r) => r.id === afterId);
             const rule = { ...newRuleTemplate("new", anchor?.prioGroup), interfaces: anchor ? [...anchor.interfaces] : [], interfaceNot: anchor?.interfaceNot ?? false };
-            setEditor({ mode: "new", afterId, rule });
+            setEditor({ mode: "new", afterId, rule, opened: wc });
           }}
         />
-        {detailsOpen && <DetailsPanel rule={active} ctx={ctx} onEdit={(patch) => active && edit((w) => updateRule(w, active.id, patch))} />}
       </div>
     </div>
   );
@@ -264,168 +262,3 @@ function BulkBar({ ids, onDone }: { ids: string[]; onDone: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-
-function DetailsPanel({ rule, ctx, onEdit }: { rule: FirewallRule | null; ctx: ObjectContext; onEdit: (patch: RulePatch) => void }) {
-  const { wc, validation } = useWorkspace();
-  const [showAll, setShowAll] = useState(false);
-  if (!rule || !wc) {
-    return (
-      <aside className="details" aria-label="Rule details">
-        <p className="muted">Select a rule to see its details.</p>
-      </aside>
-    );
-  }
-  const base = wc.baseline.rules.find((r) => r.id === rule.id);
-  const changes = base ? ruleFieldChanges(base, rule) : [];
-  const issues = validation?.rules[rule.id];
-  const ro = rule.origin !== "mvc";
-  const extraKeys = Object.keys(rule.extra).sort();
-  const shownExtra = showAll ? extraKeys : extraKeys.filter((k) => rule.extra[k] !== "" && rule.extra[k] !== "0");
-
-  const aliasRefs = [...rule.source.items, ...rule.destination.items]
-    .filter((i) => i.kind === "alias")
-    .map((i) => addressItemToken(i));
-  if (rule.sourcePort.kind === "alias") aliasRefs.push(rule.sourcePort.name);
-  if (rule.destinationPort.kind === "alias") aliasRefs.push(rule.destinationPort.name);
-
-  return (
-    <aside className="details" aria-label="Rule details">
-      <h2>{rule.description || "(no description)"}</h2>
-      <dl className="kv">
-        <dt>Status</dt>
-        <dd>{ro ? "Read-only (legacy/automatic)" : !base ? "New, staged locally" : changes.length ? "Modified, staged locally" : "Unchanged"}</dd>
-        <dt>Position</dt>
-        <dd>
-          {wc.current.rules.findIndex((r) => r.id === rule.id) + 1} of {wc.current.rules.length}
-          {rule.prioGroup && <span className="muted"> · group {groupName(rule.prioGroup)}</span>}
-        </dd>
-        <dt>Identity</dt>
-        <dd className="mono">{rule.id}</dd>
-        <dt>Quick</dt>
-        <dd>
-          <label className="checkbox">
-            <input type="checkbox" checked={rule.quick} disabled={ro} onChange={(e) => onEdit({ quick: e.target.checked })} />
-            Stop evaluating on match
-          </label>
-        </dd>
-        <dt>Invert interface</dt>
-        <dd>
-          <label className="checkbox">
-            <input type="checkbox" checked={rule.interfaceNot} disabled={ro} onChange={(e) => onEdit({ interfaceNot: e.target.checked })} />
-            Match all interfaces except the selected ones
-          </label>
-        </dd>
-      </dl>
-
-      {issues && (
-        <section>
-          <h3 className="text-error">Problems</h3>
-          <ul className="issue-list">
-            {Object.entries(issues).flatMap(([f, msgs]) => msgs.map((m, i) => <li key={`${f}${i}`}>⚠ {m}</li>))}
-          </ul>
-        </section>
-      )}
-
-      {changes.length > 0 && (
-        <section>
-          <h3>Pending changes</h3>
-          <ul className="change-fields">
-            {changes.map((c) => (
-              <li key={c.field}>
-                <span className="field-label">{c.label}</span> <span className="before">{c.before || "(empty)"}</span> →{" "}
-                <span className="after">{c.after || "(empty)"}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {aliasRefs.length > 0 && (
-        <section>
-          <h3>Referenced aliases</h3>
-          <ul className="alias-refs">
-            {[...new Set(aliasRefs)].map((n) => {
-              const a = ctx.aliases.find((x) => x.name === n);
-              return (
-                <li key={n}>
-                  <strong>{n}</strong>{" "}
-                  {a ? (
-                    <span className="muted">
-                      {a.type} · {a.entries.slice(0, 6).join(", ")}
-                      {a.entries.length > 6 ? ` +${a.entries.length - 6}` : ""}
-                    </span>
-                  ) : (
-                    <span className="text-error">missing</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <h3>
-          Advanced fields{" "}
-          <button type="button" className="link-button" onClick={() => setShowAll((s) => !s)}>
-            {showAll ? "hide empty" : `show all (${extraKeys.length})`}
-          </button>
-        </h3>
-        <p className="hint">Fields RuleDeck doesn't model directly. They are kept as-is and only sent when you change them.</p>
-        <dl className="kv advanced">
-          {shownExtra.map((k) => (
-            <ExtraField key={k} name={k} value={rule.extra[k] ?? ""} readOnly={ro} onChange={(v) => onEdit({ extra: { ...rule.extra, [k]: v } })} />
-          ))}
-          {shownExtra.length === 0 && <dd className="muted">No non-default advanced values.</dd>}
-        </dl>
-      </section>
-    </aside>
-  );
-}
-
-function groupName(prio: string) {
-  const p = Number(prio);
-  if (p === 200000) return "floating";
-  if (p >= 300000 && p < 400000) return "interface group";
-  if (p === 400000) return "interface";
-  if (p === 600000) return "invalid (not applied)";
-  return prio;
-}
-
-function ExtraField({ name, value, readOnly, onChange }: { name: string; value: string; readOnly: boolean; onChange: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [focused, setFocused] = useState(false);
-  const cancelled = useRef(false);
-  const shown = focused ? draft : value;
-  return (
-    <>
-      <dt>
-        <label htmlFor={`extra-${name}`}>{name}</label>
-      </dt>
-      <dd>
-        <input
-          id={`extra-${name}`}
-          value={shown}
-          disabled={readOnly}
-          onFocus={() => {
-            setDraft(value);
-            setFocused(true);
-          }}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            setFocused(false);
-            if (!cancelled.current && draft !== value) onChange(draft);
-            cancelled.current = false;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            if (e.key === "Escape") {
-              cancelled.current = true;
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-        />
-      </dd>
-    </>
-  );
-}

@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { addressItemToken, type AddressItem, type AddressSpec, type PortSpec } from "@ruledeck/core";
-import { BADGE, SuggestionList, useAliasDialog } from "../grid/editors.tsx";
-import { addressSuggestions, itemLabel, portSuggestions, resolveAddressToken, type ObjectContext, type Suggestion } from "../grid/objects.ts";
+import { BADGE, SuggestionList, useAliasDialog } from "./pickerParts.tsx";
+import { addressSuggestions, createAliasLabel, createAliasName, itemLabel, portSuggestions, resolveAddressToken, type ObjectContext, type Suggestion } from "../grid/objects.ts";
 
 /**
  * Form fields for the rule editor dialog (Panorama-style). Controlled: value + onChange.
@@ -76,26 +76,31 @@ export function AddressField({ label, value, onChange, ctx, errors }: { label: s
       const cur = valueRef.current;
       onChange({ ...cur, items: cur.items.map((i) => (i.kind === "alias" && i.name === from ? { ...i, name: to } : i)) });
     },
+    { quiet: true },
   );
   const suggestions = useMemo(() => addressSuggestions(query, ctx, value), [query, ctx, value]);
   const pick = (s: Suggestion) => {
-    if (s.kind === "create") aliasDialog.setDialog({ mode: "create", name: s.createName ?? "" });
-    else if (s.item) add(s.item);
+    if (s.item) add(s.item);
   };
+  const createNew = () => aliasDialog.setDialog({ mode: "create", name: createAliasName(query, ctx) });
+  const footerIndex = suggestions.length;
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setHighlight((h) => Math.min(h + 1, suggestions.length - 1));
+      setHighlight((h) => Math.min(h + 1, footerIndex));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
-      // Enter picks a suggestion; it never submits the dialog from inside a picker.
+      // Enter picks the highlighted entry; it never submits the dialog from inside a picker.
       e.preventDefault();
-      const s = suggestions[highlight];
-      if (query.trim() && s) pick(s);
+      if (highlight === footerIndex) createNew();
+      else {
+        const s = suggestions[highlight];
+        if (query.trim() && s) pick(s);
+      }
     } else if (e.key === "Escape" && (open || query)) {
       e.stopPropagation();
       setOpen(false);
@@ -147,7 +152,7 @@ export function AddressField({ label, value, onChange, ctx, errors }: { label: s
             role="combobox"
             aria-expanded={open}
             aria-controls={listId}
-            aria-activedescendant={open && suggestions.length ? `${listId}-${highlight}` : undefined}
+            aria-activedescendant={open ? `${listId}-${highlight}` : undefined}
             placeholder="Add address, network, interface or alias…"
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -164,7 +169,14 @@ export function AddressField({ label, value, onChange, ctx, errors }: { label: s
         </div>
         {open && !aliasDialog.dialog && (
           <div className="picker-dropdown inline">
-            <SuggestionList listId={listId} suggestions={suggestions} highlight={highlight} onPick={pick} onHover={setHighlight} />
+            <SuggestionList
+              listId={listId}
+              suggestions={suggestions}
+              highlight={highlight}
+              onPick={pick}
+              onHover={setHighlight}
+              footer={{ label: createAliasLabel(query, ctx), onPick: createNew }}
+            />
           </div>
         )}
       </div>
@@ -187,17 +199,18 @@ export function PortField({ label, value, onChange, ctx, errors, disabled }: { l
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
-  const aliasDialog = useAliasDialog("port", (name) => onChange({ kind: "alias", name }), () => {});
+  const aliasDialog = useAliasDialog("port", (name) => onChange({ kind: "alias", name }), () => {}, { quiet: true });
   const q = query ?? "";
   const suggestions = useMemo(() => portSuggestions(q, ctx), [q, ctx]);
+  const footerIndex = suggestions.length;
   const pick = (s: Suggestion) => {
-    if (s.kind === "create") aliasDialog.setDialog({ mode: "create", name: s.createName ?? "" });
-    else if (s.port) {
+    if (s.port) {
       onChange(s.port);
       setQuery(null);
       setOpen(false);
     }
   };
+  const createNew = () => aliasDialog.setDialog({ mode: "create", name: createAliasName(q, ctx) });
   return (
     <div className="form-field">
       <label htmlFor={id}>{label}</label>
@@ -220,7 +233,7 @@ export function PortField({ label, value, onChange, ctx, errors, disabled }: { l
             role="combobox"
             aria-expanded={open}
             aria-controls={listId}
-            aria-activedescendant={open && suggestions.length ? `${listId}-${highlight}` : undefined}
+            aria-activedescendant={open ? `${listId}-${highlight}` : undefined}
             onFocus={() => setOpen(true)}
             onBlur={() => {
               setTimeout(() => setOpen(false), 150);
@@ -240,14 +253,17 @@ export function PortField({ label, value, onChange, ctx, errors, disabled }: { l
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setHighlight((h) => Math.min(h + 1, suggestions.length - 1));
+                setHighlight((h) => Math.min(h + 1, footerIndex));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setHighlight((h) => Math.max(h - 1, 0));
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                const s = suggestions[highlight];
-                if (s) pick(s);
+                if (highlight === footerIndex) createNew();
+                else {
+                  const s = suggestions[highlight];
+                  if (s) pick(s);
+                }
               }
             }}
             spellCheck={false}
@@ -256,7 +272,14 @@ export function PortField({ label, value, onChange, ctx, errors, disabled }: { l
         </div>
         {open && !aliasDialog.dialog && (
           <div className="picker-dropdown inline">
-            <SuggestionList listId={listId} suggestions={suggestions} highlight={highlight} onPick={pick} onHover={setHighlight} />
+            <SuggestionList
+              listId={listId}
+              suggestions={suggestions}
+              highlight={highlight}
+              onPick={pick}
+              onHover={setHighlight}
+              footer={{ label: createAliasLabel(q, ctx, true), onPick: createNew }}
+            />
           </div>
         )}
       </div>

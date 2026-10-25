@@ -23,7 +23,7 @@ test.describe("apply to firewall", () => {
     await form.getByLabel("Destination port").press("Enter");
     await tab(form, "Destination");
     await form.getByRole("combobox", { name: "Destination address" }).fill("WEB_SERVERS");
-    await form.getByRole("option", { name: /Create alias "WEB_SERVERS"/ }).click();
+    await form.getByRole("button", { name: /Create new alias "WEB_SERVERS"/ }).click();
     const dialog = page.getByRole("dialog", { name: "Create alias" });
     await dialog.getByLabel("Entries").fill("192.168.1.10\n192.168.1.11");
     await dialog.getByRole("button", { name: "Create & use" }).click();

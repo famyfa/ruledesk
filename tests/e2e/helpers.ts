@@ -61,7 +61,7 @@ export const tab = (dialog: ReturnType<Page["locator"]>, name: string) => dialog
 /** Stage a change through the form: switch logging on for a rule. */
 export async function turnLogOn(page: Page, rowText: string) {
   const dialog = await openRule(page, rowText);
-  await tab(dialog, "Actions");
+  await tab(dialog, "Advanced");
   await dialog.getByLabel("Log packets that match this rule").check();
   await dialog.getByRole("button", { name: "OK", exact: true }).click();
   await expect(dialog).toBeHidden();

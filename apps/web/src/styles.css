@@ -1440,6 +1440,7 @@ input[aria-invalid="true"] {
 /* ---------------------------------------------------------------- rule editor dialog (Panorama style) */
 .modal.rule-editor {
   width: min(820px, 96vw);
+  height: min(660px, 92vh); /* fixed, so the dialog doesn't jump between tabs */
   max-height: 92vh;
   display: flex;
   flex-direction: column;
@@ -1479,12 +1480,16 @@ input[aria-invalid="true"] {
   color: var(--invalid-fg);
 }
 .rule-editor-body {
-  border: 0;
-  margin: 0;
   padding: 14px 16px;
   overflow: auto;
   flex: 1;
-  min-height: 300px;
+  min-height: 340px;
+}
+.rule-editor-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 .rule-editor > .form-actions {
   padding: 10px 16px;
@@ -1571,4 +1576,48 @@ input[aria-invalid="true"] {
 }
 .modal.rule-editor {
   padding: 0;
+}
+
+/* ---------------------------------------------------------------- picker: scroll list + create box */
+.suggestion-panel {
+  display: flex;
+  flex-direction: column;
+}
+.suggestion-panel .suggestions {
+  max-height: 210px; /* the list scrolls; the create box below stays put */
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+.create-alias-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 6px 10px;
+  text-align: left;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.create-alias-box:hover,
+.create-alias-box.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-style: solid;
+}
+.create-alias-box .obj-badge {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.create-alias-box:hover .obj-badge,
+.create-alias-box.active .obj-badge {
+  background: var(--accent-contrast);
+  color: var(--accent);
+}
+/* The details side panel is gone; the grid uses the full width. */
+.rules-main {
+  grid-template-columns: 1fr;
 }

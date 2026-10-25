@@ -26,7 +26,7 @@ test.describe("inline alias creation (rule form)", () => {
     await tab(dialog, "Destination");
     const picker = dialog.getByRole("combobox", { name: "Destination address" });
     await picker.fill("WEB_SERVERS");
-    const create = dialog.getByRole("option", { name: /Create alias "WEB_SERVERS"/ });
+    const create = dialog.getByRole("button", { name: /Create new alias "WEB_SERVERS"/ });
     await expect(create).toBeVisible();
     await create.click();
 
@@ -88,15 +88,59 @@ test.describe("inline alias creation (rule form)", () => {
     await expect(page.getByText(/Restored 2 staged changes/)).toBeVisible();
   });
 
-  test("Cancel discards the rule; an alias you explicitly created stays staged (undo removes it)", async ({ page }) => {
+  test("Cancel undoes everything done in the form, including an alias created there", async ({ page }) => {
     await login(page);
     const dialog = await buildWebRule(page);
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /1 pending/ })).toBeVisible();
-    await page.getByRole("button", { name: "↶ Undo" }).click();
     await expect(page.getByRole("button", { name: /0 pending/ })).toBeVisible();
+    // The alias is gone too: it isn't offered any more.
+    const other = await openRule(page, "Block DMZ to LAN");
+    await tab(other, "Source");
+    await other.getByRole("combobox", { name: "Source address" }).fill("WEB_SERVERS");
+    await expect(other.getByRole("option", { name: /WEB_SERVERS/ })).toHaveCount(0);
+    await other.getByRole("button", { name: "Cancel" }).click();
+  });
+
+  test("the create box sits under a scrolling list of existing aliases", async ({ page }) => {
+    await login(page);
+    const dialog = await openRule(page, "Block DMZ to LAN");
+    await tab(dialog, "Destination");
+    await dialog.getByRole("combobox", { name: "Destination address" }).click();
+    const list = dialog.locator(".suggestion-panel .suggestions");
+    await expect(list.getByRole("option", { name: /ADMIN_HOSTS/ })).toBeVisible();
+    await expect(list.getByRole("option", { name: /RFC1918/ })).toBeVisible();
+    const box = dialog.getByRole("button", { name: /Create new alias/ });
+    await expect(box).toBeVisible();
+    const [lb, bb] = await Promise.all([list.boundingBox(), box.boundingBox()]);
+    expect(bb!.y).toBeGreaterThanOrEqual(lb!.y + lb!.height - 1); // below the list, not inside it
+
+    // Really on screen and clickable (not clipped by a scrolling parent): the topmost element at its centre is the box.
+    for (const target of [list.getByRole("option", { name: /RFC1918/ }), box]) {
+      const hit = await target.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!top && el.contains(top);
+      });
+      expect(hit, "dropdown entry is clipped or covered").toBe(true);
+    }
+  });
+
+  test("logging is on the Advanced tab", async ({ page }) => {
+    await login(page);
+    const dialog = await openRule(page, "Block DMZ to LAN");
+    await tab(dialog, "Actions");
+    await expect(dialog.getByLabel("Log packets that match this rule")).toHaveCount(0);
+    await tab(dialog, "Advanced");
+    await expect(dialog.getByLabel("Log packets that match this rule")).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+  });
+
+  test("there is no separate details panel any more", async ({ page }) => {
+    await login(page);
+    await expect(page.getByRole("complementary", { name: "Rule details" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /details/i })).toHaveCount(0);
   });
 
   test("a literal address needs no alias, and invalid input is flagged on its tab", async ({ page }) => {

@@ -119,6 +119,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Keep inline alias creation inside the form's source/destination pickers ("Create alias" without leaving the form)
 - [x] Same form style for aliases (alias editor dialog)
 - [x] Grid stays for viewing, selecting, reordering, bulk edit, copy/paste; editing happens in the form
+- [x] Feedback round 2: logging moved to the Advanced tab; alias picker = scrolling list + fixed "Create new alias" box; details side panel removed; Cancel in the rule form undoes everything done in it (including aliases created there); dropdowns no longer clipped by the dialog
 
 ## 11. Lab findings to finish (2026-10-25)
 - [x] Record real OPNsense differences in docs/api-compatibility.md (get_rule defaults shape, firmware/info shape, unauthenticated API -> 302, TLS session resumption vs pinning)

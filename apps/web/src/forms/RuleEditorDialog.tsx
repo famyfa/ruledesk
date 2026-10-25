@@ -123,7 +123,9 @@ export function RuleEditorDialog({
           ))}
         </div>
 
-        <fieldset className="rule-editor-body" disabled={readOnly}>
+        {/* A scrolling <fieldset> would clip the pickers' dropdowns, so the div scrolls and the fieldset only disables. */}
+        <div className="rule-editor-body">
+        <fieldset className="rule-editor-fields" disabled={readOnly}>
           {tab === "General" && (
             <div className="form-grid">
               <div className="form-field wide">
@@ -201,10 +203,6 @@ export function RuleEditorDialog({
                 ))}
               </fieldset>
               <label className="checkbox">
-                <input type="checkbox" checked={draft.log} onChange={(e) => set({ log: e.target.checked })} />
-                Log packets that match this rule
-              </label>
-              <label className="checkbox">
                 <input type="checkbox" checked={draft.quick} onChange={(e) => set({ quick: e.target.checked })} />
                 Quick (stop evaluating further rules on match)
               </label>
@@ -213,6 +211,10 @@ export function RuleEditorDialog({
 
           {tab === "Advanced" && (
             <div className="form-grid">
+              <label className="checkbox wide">
+                <input type="checkbox" checked={draft.log} onChange={(e) => set({ log: e.target.checked })} />
+                Log packets that match this rule
+              </label>
               <p className="hint wide">Fields RuleDeck doesn't model directly. They're kept as they are and only sent when you change them.</p>
               {Object.keys(draft.extra).sort().map((k) => (
                 <div className="form-field" key={k}>
@@ -224,6 +226,7 @@ export function RuleEditorDialog({
             </div>
           )}
         </fieldset>
+        </div>
 
         <footer className="form-actions">
           {triedSave && errorCount > 0 && (

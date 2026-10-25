@@ -11,7 +11,7 @@ import {
   type RulePatch,
 } from "@ruledeck/core";
 import { aliasPreview, itemLabel, resolveAddressToken, resolvePortToken, type ObjectContext } from "./objects.ts";
-import { BADGE } from "./editors.tsx";
+import { BADGE } from "../forms/pickerParts.tsx";
 
 export type EditorKind = "bool" | "select" | "text" | "address" | "port" | "interfaces" | "none";
 

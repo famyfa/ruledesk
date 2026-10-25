@@ -17,7 +17,7 @@ export interface ObjectContext {
   aliases: Alias[];
 }
 
-export type SuggestionKind = "any" | "self" | "iface" | "ifaceAddr" | "alias" | "literal" | "port" | "create";
+export type SuggestionKind = "any" | "self" | "iface" | "ifaceAddr" | "alias" | "literal" | "port";
 
 export interface Suggestion {
   key: string;
@@ -28,8 +28,6 @@ export interface Suggestion {
   item?: AddressItem | "any";
   /** For port pickers. */
   port?: PortSpec;
-  /** For "create alias" entries. */
-  createName?: string;
 }
 
 export function aliasPreview(a: Alias, max = 3): string {
@@ -96,6 +94,17 @@ function canCreate(name: string, ctx: ObjectContext) {
   return validateAliasName(name, ctx.aliases.map((a) => a.name)).length === 0;
 }
 
+/** Name to prefill in "Create new alias": what was typed, if it works as an alias name. */
+export function createAliasName(query: string, ctx: ObjectContext): string {
+  const t = query.trim();
+  return t && canCreate(t, ctx) ? t : "";
+}
+
+export function createAliasLabel(query: string, ctx: ObjectContext, port = false): string {
+  const name = createAliasName(query, ctx);
+  return name ? `Create new ${port ? "port " : ""}alias "${name}"` : `Create new ${port ? "port " : ""}alias…`;
+}
+
 export function addressSuggestions(query: string, ctx: ObjectContext, current: AddressSpec): Suggestion[] {
   const q = query.trim().toLowerCase();
   const chosen = new Set(current.items.map(addressItemToken));
@@ -121,11 +130,6 @@ export function addressSuggestions(query: string, ctx: ObjectContext, current: A
   if (q && isAddressLiteral(query.trim())) {
     out.unshift({ key: `lit:${q}`, kind: "literal", label: query.trim(), detail: "Address / network", item: { kind: "literal", value: query.trim() } });
   }
-  if (q && canCreate(query.trim(), ctx)) {
-    out.push({ key: `create:${q}`, kind: "create", label: `Create alias "${query.trim()}"`, detail: "New alias, staged locally", createName: query.trim() });
-  } else if (!q) {
-    out.push({ key: "create:", kind: "create", label: "Create new alias…", detail: "New alias, staged locally", createName: "" });
-  }
   return out;
 }
 
@@ -142,11 +146,6 @@ export function portSuggestions(query: string, ctx: ObjectContext): Suggestion[]
   const t = query.trim();
   if (t && /^\d+([-:]\d+)?$/.test(t) && isPortLiteral(t)) {
     out.unshift({ key: `lit:${t}`, kind: "literal", label: t, detail: t.match(/[-:]/) ? "Port range" : "Port", port: { kind: "literal", value: t } });
-  }
-  if (t && canCreate(t, ctx)) {
-    out.push({ key: `create:${t}`, kind: "create", label: `Create port alias "${t}"`, detail: "New alias, staged locally", createName: t });
-  } else if (!t) {
-    out.push({ key: "create:", kind: "create", label: "Create new port alias…", detail: "New alias, staged locally", createName: "" });
   }
   return out;
 }
