@@ -29,6 +29,7 @@ export default defineConfig({
       RULEDECK_APPLY_RATE_LIMIT: "200",
       RULEDECK_SITE_LOGIN_FAILURES: "100",
       NODE_ENV: "development",
+      MOCK_AUTOLOG: "0", // tests control the log themselves
     },
   },
 });

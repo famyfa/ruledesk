@@ -10,7 +10,7 @@ test.describe("navigation", () => {
   test("top tabs open the pages; the left tree shows sub-pages for Policies and Objects", async ({ page }) => {
     await login(page);
     const tabs = page.getByRole("navigation", { name: "Main" });
-    for (const name of ["Dashboard", "Policies", "Objects", "Sites", "Changes", "History", "Settings"]) {
+    for (const name of ["Dashboard", "Monitor", "Policies", "Objects", "Sites", "Changes", "History", "Settings"]) {
       await expect(tabs.getByRole("button", { name })).toBeVisible();
     }
 

@@ -1654,3 +1654,21 @@ input[aria-invalid="true"] {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- monitor / firewall log */
+.monitor-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.log-table td {
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.log-table tr.log-block td:first-child {
+  box-shadow: inset 3px 0 0 var(--block);
+}
+.log-table tr.log-pass td:first-child {
+  box-shadow: inset 3px 0 0 var(--pass);
+}

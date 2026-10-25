@@ -26,8 +26,10 @@ export interface MockAuthOptions {
 export const DEFAULT_USERS: Record<string, MockUser> = {
   root: { password: "opnsense", privileges: ["*"] },
   admin: { password: "ruledeck-dev", privileges: ["*"] },
+  // Can do everything except read the firewall log ("!" entries are denied).
+  nolog: { password: "nolog-pass", privileges: ["*", "!diagnostics/firewall/log"] },
   // Can read rules and aliases but not write anything.
-  viewer: { password: "viewer-pass", privileges: ["firewall/filter/search_rule", "firewall/filter/get_", "firewall/filter/list_", "firewall/alias/search_item", "firewall/alias/get_item", "core/firmware/info"] },
+  viewer: { password: "viewer-pass", privileges: ["firewall/filter/search_rule", "firewall/filter/get_", "firewall/filter/list_", "firewall/alias/search_item", "firewall/alias/get_item", "core/firmware/info", "diagnostics/firewall/log"] },
 };
 
 interface Session {
@@ -111,7 +113,8 @@ export class MockAuth {
       user = s.username;
     }
     const privs = this.users[user]?.privileges ?? [];
-    if (!privs.includes("*") && !privs.some((p) => apiPath.startsWith(p))) {
+    const denied = privs.some((p) => p.startsWith("!") && apiPath.startsWith(p.slice(1)));
+    if (denied || (!privs.includes("*") && !privs.some((p) => apiPath.startsWith(p)))) {
       // API keys get JSON; GUI sessions get ControllerRoot::doAuth's redirect with an empty 403.
       if (authz) reply.code(403).send({ status: 403, message: "Forbidden" });
       else reply.code(403).header("location", "/").send("");

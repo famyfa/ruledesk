@@ -112,6 +112,31 @@ export interface FirewallSnapshot {
   fingerprints: Record<string, string>;
 }
 
+/** One line of the firewall log (pf filterlog), normalized. All values are display strings. */
+export interface FirewallLogEntry {
+  /** md5 of the raw log line; used to ask only for newer lines. */
+  digest: string;
+  time: string;
+  host: string;
+  action: string;
+  dir: string;
+  /** Device name as logged by pf (e.g. vtnet1), not the OPNsense interface key. */
+  interface: string;
+  ipVersion: string;
+  protocol: string;
+  src: string;
+  srcPort: string;
+  dst: string;
+  dstPort: string;
+  length: string;
+  tcpFlags: string;
+  reason: string;
+  /** Identity of the rule that matched: the rule uuid, or a pf label for automatic rules. */
+  ruleId: string;
+  /** Description of that rule from the running ruleset. */
+  ruleLabel: string;
+}
+
 export const ANY_ADDRESS: AddressSpec = { negate: false, items: [] };
 export const ANY_PORT: PortSpec = { kind: "any" };
 

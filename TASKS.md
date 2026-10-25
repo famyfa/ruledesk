@@ -122,6 +122,8 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Feedback round 2: logging moved to the Advanced tab; alias picker = scrolling list + fixed "Create new alias" box; details side panel removed; Cancel in the rule form undoes everything done in it (including aliases created there); dropdowns no longer clipped by the dialog
 - [x] Bug: automatic rules sharing one reference showed as pending "modifications" (unique ids for read-only rules; they never take part in change detection; regression tests incl. E2E)
 - [x] Navigation like Panorama: top tabs (Dashboard, Policies, Objects, Sites, Changes, History, Settings), a left tree for tabs with sub-pages, pending/apply controls in the top bar, site switcher + undo/redo/refresh in a second row
+- [x] Monitor tab: live firewall log of the primary (polling by digest, filters, pause/clear, rule links, forbidden/missed handling; mock endpoint, client, server route with rate limit, unit + E2E tests)
+- [ ] Monitor: verify `diagnostics/firewall/log` against the live lab
 
 ## 11. Lab findings to finish (2026-10-25)
 - [x] Record real OPNsense differences in docs/api-compatibility.md (get_rule defaults shape, firmware/info shape, unauthenticated API -> 302, TLS session resumption vs pinning)

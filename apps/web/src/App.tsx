@@ -7,8 +7,9 @@ import { RulesPage } from "./pages/RulesPage.tsx";
 import { AliasesPage } from "./pages/AliasesPage.tsx";
 import { HistoryPage, OverviewPage, SettingsPage, SitesPage } from "./pages/OtherPages.tsx";
 import { ChangesPage } from "./pages/ChangesPage.tsx";
+import { MonitorPage } from "./pages/MonitorPage.tsx";
 
-const PAGES: Page[] = ["overview", "sites", "rules", "aliases", "changes", "history", "settings"];
+const PAGES: Page[] = ["overview", "monitor", "sites", "rules", "aliases", "changes", "history", "settings"];
 
 function pageFromHash(): Page {
   const h = location.hash.replace(/^#\/?/, "") as Page;
@@ -91,6 +92,7 @@ export function App() {
       >
         {page === "rules" && <RulesPage key={focusRule ?? "rules"} initialActiveId={focusRule} />}
         {page === "aliases" && <AliasesPage onShowRule={showRule} />}
+        {page === "monitor" && <MonitorPage onShowRule={showRule} />}
         {page === "changes" && <ChangesPage onShowRule={showRule} />}
         {page === "overview" && <OverviewPage go={setPage} />}
         {page === "sites" && <SitesPage />}

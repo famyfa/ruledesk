@@ -1,4 +1,4 @@
-import type { FieldChange, FirewallInfo, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
+import type { FieldChange, FirewallInfo, FirewallLogEntry, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
 
 export interface ApiErrorBody {
   kind: string;
@@ -127,6 +127,12 @@ export const api = {
   },
   connect: (id: string) => request<{ site: SiteView }>("POST", `${site(id)}/connect`),
   snapshot: (id: string) => request<{ snapshot: FirewallSnapshot }>("GET", `${site(id)}/snapshot`),
+  log: (id: string, opts: { limit?: number; digest?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.limit) q.set("limit", String(opts.limit));
+    if (opts.digest) q.set("digest", opts.digest);
+    return request<{ entries: FirewallLogEntry[]; missed: boolean }>("GET", `${site(id)}/log?${q}`);
+  },
   apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
     request<{ result: ApplyResult }>("POST", `${site(id)}/apply`, {
       baseline: wc.baseline,

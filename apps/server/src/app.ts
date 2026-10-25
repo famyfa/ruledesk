@@ -6,7 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { z } from "zod";
 import { OpnsenseError } from "@ruledeck/opnsense-client";
 import type { AppConfig } from "./config.ts";
-import { RateLimiter, safeEqual, SessionStore, type Session, type SiteSession } from "./auth.ts";
+import { RateLimiter, safeEqual, SessionStore, track, type Session, type SiteSession } from "./auth.ts";
 import { applyToSite, endSiteSession, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
 import { publicTopology, type SiteConfig } from "./topology.ts";
 import { ApplyRequestSchema, SharedRequestSchema } from "./schemas.ts";
@@ -33,6 +33,11 @@ const SiteLoginSchema = z.discriminatedUnion("method", [
 ]);
 const LoginBody = z.object({ sites: z.record(z.string().max(32), SiteLoginSchema) });
 const SiteParams = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/) });
+const LogQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(2000).default(200),
+  /** md5 digest of the newest line the browser already has */
+  digest: z.string().regex(/^[0-9a-f]{32}$/).optional(),
+});
 
 /** Routes that don't need a session. */
 const PUBLIC_ROUTES = new Set(["/api/health", "/api/topology", "/api/auth/login", "/api/auth/session"]);
@@ -62,6 +67,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const loginLimiter = new RateLimiter(5, 60_000);
   const siteFailureLimiter = new RateLimiter(config.siteLoginFailures ?? 4, 60 * 60_000);
   const applyLimiter = new RateLimiter(config.applyRateLimit ?? 10, 60_000);
+  // Live log polling: generous, but a runaway browser tab must not hammer the firewall.
+  const logLimiter = new RateLimiter(120, 60_000);
 
   const app = Fastify({
     logger:
@@ -293,6 +300,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const snapshot = await withSite(s, reply, () => snapshotOf(s));
     if (!snapshot) return;
     return { snapshot };
+  });
+
+  /** Firewall log of the site's primary (read-only), newest first. Pass `digest` to get only newer lines. */
+  app.get("/api/sites/:id/log", async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    const q = LogQuery.safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: { kind: "bad_request", message: "Invalid log request." } });
+    if (!logLimiter.take(req.session!.id)) {
+      return reply.code(429).send({ error: { kind: "rate_limited", message: "Reading the log too often. Slow down." } });
+    }
+    const result = await withSite(s, reply, () => track(s, () => s.client.readFirewallLog({ limit: q.data.limit, sinceDigest: q.data.digest })));
+    if (!result) return;
+    return result;
   });
 
   app.post("/api/sites/:id/apply", { bodyLimit: 16 * 1024 * 1024 }, async (req, reply) => {

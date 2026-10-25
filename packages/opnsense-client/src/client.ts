@@ -1,4 +1,4 @@
-import type { Alias, FirewallRule, InterfaceInfo, SelectionOptions } from "@ruledeck/core";
+import type { Alias, FirewallLogEntry, FirewallRule, InterfaceInfo, SelectionOptions } from "@ruledeck/core";
 import { OpnsenseError } from "./errors.ts";
 import { OpnsenseHttp, type ConnectionConfig } from "./http.ts";
 import {
@@ -18,6 +18,7 @@ import {
   ALIAS_VOLATILE,
   fingerprint,
   flattenRecord,
+  logEntryFromRecord,
   ruleFromRecord,
   RULE_VOLATILE,
   uniqueRuleIds,
@@ -50,6 +51,8 @@ export const EP = {
   haGet: "core/hasync/get",
   haVersion: "core/hasync_status/version",
   haRestartAll: "core/hasync_status/restart_all",
+  // Monitoring (read-only; verified against 26.7.7 source: Diagnostics FirewallController::logAction)
+  firewallLog: "diagnostics/firewall/log",
 } as const;
 
 const PAGE = 500;
@@ -294,5 +297,32 @@ export class OpnsenseClient {
   async haSyncNow(): Promise<string> {
     const raw = (await this.http.post(EP.haRestartAll)) as { status?: unknown };
     return typeof raw?.status === "string" ? raw.status : "unknown";
+  }
+
+  // ---------------------------------------------------------------- monitoring
+
+  /**
+   * Read the firewall log, newest first. With `sinceDigest`, only lines newer
+   * than that one are returned (the firewall stops at the digest and includes
+   * it as the last row, which is cut off here). `missed` is true when the
+   * digest wasn't found within `limit` rows, so lines in between may be missing.
+   */
+  async readFirewallLog(opts: { limit: number; sinceDigest?: string }): Promise<{ entries: FirewallLogEntry[]; missed: boolean }> {
+    const query: Record<string, string> = { limit: String(opts.limit) };
+    if (opts.sinceDigest) query.digest = opts.sinceDigest;
+    const raw = await this.http.get(EP.firewallLog, { query });
+    if (!Array.isArray(raw)) {
+      throw new OpnsenseError("protocol", `Unexpected response shape from ${EP.firewallLog}: expected a list of log lines.`, { endpoint: EP.firewallLog });
+    }
+    let entries = raw
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && !Array.isArray(r))
+      .map(logEntryFromRecord);
+    let missed = false;
+    if (opts.sinceDigest) {
+      const at = entries.findIndex((e) => e.digest === opts.sinceDigest);
+      if (at >= 0) entries = entries.slice(0, at);
+      else missed = entries.length >= opts.limit;
+    }
+    return { entries, missed };
   }
 }

@@ -22,6 +22,8 @@ export interface MockServerOptions extends MockAuthOptions {
   dmzKey?: string;
   /** Distinct seed uuids per site. */
   uuidSalt?: string;
+  /** Add new log lines on their own while the log is being read (for the dev stack). */
+  autoLog?: boolean;
 }
 
 /** One change recorded with the user who made it, like OPNsense's config history. */
@@ -61,6 +63,7 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
   const stateOpts = () => ({ version: opts.version, dmzKey: opts.dmzKey, uuidSalt: opts.uuidSalt });
   let state = new MockState(stateOpts());
   let secondary: { peer: MockServer; address: string } | null = null;
+  let lastAutoLog = 0;
   let faults: Fault[] = [];
   let history: HistoryEntry[] = [];
 
@@ -370,6 +373,33 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
   app.post("/api/firewall/alias/reconfigure", async () => {
     state.aliasPendingReconfigure = false;
     return { status: "ok" };
+  });
+
+  // ---------------------------------------------------------------- firewall log (diagnostics/firewall/log)
+  // Same semantics as scripts/filter/read_log.py: newest first, stops after `limit` rows or at the row whose digest matches (that row is included).
+  app.get("/api/diagnostics/firewall/log", async (req) => {
+    const q = (req.query ?? {}) as { limit?: string; digest?: string };
+    if (opts.autoLog && Date.now() - lastAutoLog > 1500) {
+      lastAutoLog = Date.now();
+      const rules = [...state.rules.entries()];
+      for (let i = 0; i < 1 + Math.floor(Math.random() * 3); i++) {
+        const [uuid, rule] = rules[Math.floor(Math.random() * rules.length)]!;
+        state.addLog({ rid: uuid, label: rule.description ?? "", action: rule.action === "block" ? "block" : "pass" });
+      }
+    }
+    const limit = q.limit ? Number(q.limit) : 1000;
+    const out: RawRecord[] = [];
+    for (const row of state.logRows) {
+      out.push(row);
+      if (limit !== 0 && out.length >= limit) break;
+      if (q.digest && row.__digest__ === q.digest) break;
+    }
+    return out;
+  });
+  app.post("/__mock/log", async (req) => {
+    const rows = (req.body ?? []) as RawRecord[];
+    for (const r of rows) state.addLog(r);
+    return { status: "ok", total: state.logRows.length };
   });
 
   // ---------------------------------------------------------------- category

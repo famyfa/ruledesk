@@ -5,7 +5,7 @@ import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
 
-export type Page = "overview" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
+export type Page = "overview" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 /**
  * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
@@ -21,6 +21,7 @@ interface NavTab {
 
 const TABS: NavTab[] = [
   { id: "dashboard", label: "Dashboard", pages: [{ page: "overview", label: "Overview" }] },
+  { id: "monitor", label: "Monitor", tree: true, pages: [{ page: "monitor", label: "Firewall Log" }] },
   { id: "policies", label: "Policies", tree: true, pages: [{ page: "rules", label: "Firewall Rules" }] },
   { id: "objects", label: "Objects", tree: true, pages: [{ page: "aliases", label: "Aliases" }] },
   { id: "sites", label: "Sites", pages: [{ page: "sites", label: "Sites" }] },

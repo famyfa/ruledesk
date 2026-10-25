@@ -161,3 +161,49 @@ describe("signing in with username and password (GUI session)", () => {
     await expect(new OpnsenseClient({ baseUrl, auth: credentials }).getVersion()).rejects.toMatchObject({ kind: "auth" });
   });
 });
+
+describe("firewall log", () => {
+  const post = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("reads the newest lines first and links them to rules", async () => {
+    const { entries, missed } = await client().readFirewallLog({ limit: 10 });
+    expect(entries).toHaveLength(10);
+    expect(missed).toBe(false);
+    expect(entries[0]!.digest).toMatch(/^[0-9a-f]{32}$/);
+    const ruleUuids = new Set((await client().readAll()).rules.map((r) => r.id));
+    expect(entries.every((e) => e.ruleId === "0" || ruleUuids.has(e.ruleId))).toBe(true);
+    expect(entries.some((e) => e.ruleLabel !== "")).toBe(true);
+  });
+
+  it("returns only newer lines when given the digest of the newest known line", async () => {
+    const first = (await client().readFirewallLog({ limit: 5 })).entries;
+    expect((await client().readFirewallLog({ limit: 50, sinceDigest: first[0]!.digest })).entries).toEqual([]);
+    await post("/__mock/log", [{ src: "198.51.100.1", dstport: "8080", action: "block" }, { src: "198.51.100.2", dstport: "8081" }]);
+    const newer = await client().readFirewallLog({ limit: 50, sinceDigest: first[0]!.digest });
+    expect(newer.entries.map((e) => e.src)).toEqual(["198.51.100.2", "198.51.100.1"]);
+    expect(newer.missed).toBe(false);
+  });
+
+  it("says when lines may have been missed (digest not in the window)", async () => {
+    const old = (await client().readFirewallLog({ limit: 1 })).entries[0]!;
+    await post("/__mock/log", Array.from({ length: 8 }, (_, i) => ({ src: `198.51.100.${i}` })));
+    const r = await client().readFirewallLog({ limit: 5, sinceDigest: old.digest });
+    expect(r.entries).toHaveLength(5);
+    expect(r.missed).toBe(true);
+  });
+
+  it("a read-only user can read the log", async () => {
+    const { credentials } = await loginWithPassword({ baseUrl }, "viewer", "viewer-pass");
+    expect((await new OpnsenseClient({ baseUrl, auth: credentials }).readFirewallLog({ limit: 3 })).entries).toHaveLength(3);
+  });
+
+  it("reports a missing privilege as forbidden", async () => {
+    const { credentials } = await loginWithPassword({ baseUrl }, "nolog", "nolog-pass");
+    await expect(new OpnsenseClient({ baseUrl, auth: credentials }).readFirewallLog({ limit: 3 })).rejects.toMatchObject({ kind: "forbidden" });
+  });
+
+  it("rejects an answer that isn't a list", async () => {
+    await post("/__mock/faults", [{ match: "diagnostics/firewall/log", type: "validation" }]);
+    await expect(client().readFirewallLog({ limit: 3 })).rejects.toMatchObject({ kind: "validation" });
+  });
+});

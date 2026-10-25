@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Alias, FirewallRule, IpProtocol, RuleAction, RuleDirection } from "@ruledeck/core";
+import type { Alias, FirewallLogEntry, FirewallRule, IpProtocol, RuleAction, RuleDirection } from "@ruledeck/core";
 import { IP_PROTOCOLS, RULE_ACTIONS, RULE_DIRECTIONS, parseAddress, parsePort, serializeAddress, serializePort, type AddressContext } from "@ruledeck/core";
 
 /**
@@ -199,4 +199,34 @@ export function uniqueRuleIds(rules: FirewallRule[]): FirewallRule[] {
     seen.set(r.id, n + 1);
     return n === 0 ? r : { ...r, id: `${r.id}#${n + 1}` };
   });
+}
+
+/**
+ * Normalize one row of `diagnostics/firewall/log`. Only known fields are kept
+ * (and cut to a sane length), so a firewall can't push arbitrary data into the UI.
+ */
+export function logEntryFromRecord(rec: Record<string, unknown>): FirewallLogEntry {
+  const str = (k: string, max = 256) => {
+    const v = rec[k];
+    return typeof v === "string" || typeof v === "number" ? String(v).slice(0, max) : "";
+  };
+  return {
+    digest: str("__digest__", 64),
+    time: str("__timestamp__", 64),
+    host: str("__host__", 128),
+    action: str("action", 16),
+    dir: str("dir", 8),
+    interface: str("interface", 32),
+    ipVersion: str("ipversion", 2),
+    protocol: str("protoname", 32) || str("protonum", 8),
+    src: str("src", 64),
+    srcPort: str("srcport", 8),
+    dst: str("dst", 64),
+    dstPort: str("dstport", 8),
+    length: str("length", 8),
+    tcpFlags: str("tcpflags", 16),
+    reason: str("reason", 32),
+    ruleId: str("rid", 64),
+    ruleLabel: str("label", 256),
+  };
 }

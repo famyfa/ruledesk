@@ -334,3 +334,47 @@ describe("hardening (review findings)", () => {
     store.close();
   });
 });
+
+describe("firewall log route", () => {
+  it("returns the log of the site's primary, newest first, and only newer lines on request", async () => {
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") });
+    const first = (await app.inject({ method: "GET", url: "/api/sites/ber/log?limit=5", headers: { cookie } })).json();
+    expect(first.entries).toHaveLength(5);
+    expect(Object.keys(first.entries[0]).sort()).toEqual(
+      ["action", "digest", "dir", "dst", "dstPort", "host", "interface", "ipVersion", "length", "protocol", "reason", "ruleId", "ruleLabel", "src", "srcPort", "tcpFlags", "time"].sort(),
+    );
+    const none = (await app.inject({ method: "GET", url: `/api/sites/ber/log?digest=${first.entries[0].digest}`, headers: { cookie } })).json();
+    expect(none).toEqual({ entries: [], missed: false });
+    await fetch(`${urlOf(ber)}/__mock/log`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify([{ src: "198.51.100.7", action: "block" }]) });
+    const newer = (await app.inject({ method: "GET", url: `/api/sites/ber/log?digest=${first.entries[0].digest}`, headers: { cookie } })).json();
+    expect(newer.entries.map((e: { src: string }) => e.src)).toEqual(["198.51.100.7"]);
+  });
+
+  it("validates the query", async () => {
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") });
+    for (const q of ["limit=0", "limit=99999", "limit=abc", "digest=zzz", "digest=0123", "digest=../../etc"]) {
+      expect((await app.inject({ method: "GET", url: `/api/sites/ber/log?${q}`, headers: { cookie } })).statusCode, q).toBe(400);
+    }
+  });
+
+  it("needs a session and a signed-in site", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/sites/ber/log" })).statusCode).toBe(401);
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") });
+    expect((await app.inject({ method: "GET", url: "/api/sites/muc/log", headers: { cookie } })).json().error.kind).toBe("site_signed_out");
+  });
+
+  it("reports a missing privilege to the browser as 'forbidden'", async () => {
+    const { cookie } = await login({ ber: pw("nolog", "nolog-pass") }, "10.5.5.5");
+    const res = await app.inject({ method: "GET", url: "/api/sites/ber/log", headers: { cookie } });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error.kind).toBe("forbidden");
+  });
+
+  it("asks for a new sign-in when the firewall session ended", async () => {
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") }, "10.5.5.6");
+    await fetch(`${urlOf(ber)}/__mock/expire-sessions`, { method: "POST" });
+    const res = await app.inject({ method: "GET", url: "/api/sites/ber/log", headers: { cookie } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toMatchObject({ kind: "site_signed_out", siteId: "ber" });
+  });
+});

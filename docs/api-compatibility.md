@@ -66,6 +66,14 @@ Alias types (from model): `host`, `network`, `port`, `url`, `urltable`, `urljson
 
 Every MVC save creates a new config history entry. That is RuleDeck's recovery mechanism on all versions.
 
+## Monitoring (read-only)
+
+| Operation | Endpoint | Method | 26.7 | Live | Notes |
+|---|---|---|---|---|---|
+| Firewall log | `diagnostics/firewall/log` | GET | source | ☐ | Query `limit` (0 = all), `digest`. Newest first; stops after `limit` rows or at the row whose `__digest__` matches (that row is included, RuleDeck cuts it off). Row fields: `__timestamp__`, `__host__`, `__digest__`, `action`, `dir`, `interface` (device name, e.g. vtnet1), `ipversion`, `protoname`, `src`, `dst`, `srcport`, `dstport`, `rid` (rule uuid or pf label), `label`. Needs the privilege for Firewall: Log Files: Live View |
+
+RuleDeck only reads this log from the HA primary, never stores it, and keeps just a whitelist of fields.
+
 ## Feature flags by version
 
 | Flag | 25.7 | 26.1 | 26.7 |

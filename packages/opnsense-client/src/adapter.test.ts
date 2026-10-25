@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasFromRecord, aliasToRecord, fingerprint, flattenRecord, ruleChangedFields, ruleFromRecord, ruleToRecord, RULE_VOLATILE, uniqueRuleIds } from "./adapter.ts";
+import { aliasFromRecord, aliasToRecord, fingerprint, flattenRecord, ruleChangedFields, ruleFromRecord, ruleToRecord, RULE_VOLATILE, uniqueRuleIds, logEntryFromRecord } from "./adapter.ts";
 import { featuresFor, parseVersion } from "./version.ts";
 import { apiPath, validateBaseUrl } from "./http.ts";
 import { mapResponseError } from "./errors.ts";
@@ -176,5 +176,38 @@ describe("ids of read-only rules", () => {
   it("prefer the pf label over the shared reference", () => {
     const r = ruleFromRecord({ legacy: "1", uuid: "abc123", ref: "system/x", description: "d" }, ctx2, 0);
     expect(r.id).toBe("legacy:abc123");
+  });
+});
+
+describe("firewall log rows", () => {
+  it("keeps the known fields as display strings and drops the rest", () => {
+    const e = logEntryFromRecord({
+      __digest__: "d41d8cd98f00b204e9800998ecf8427e",
+      __timestamp__: "2026-10-25T17:01:02",
+      __host__: "fw",
+      action: "block",
+      dir: "in",
+      interface: "vtnet1",
+      ipversion: "4",
+      protoname: "tcp",
+      protonum: "6",
+      src: "203.0.113.9",
+      srcport: "51234",
+      dst: "192.168.1.10",
+      dstport: "22",
+      length: 60,
+      tcpflags: "S",
+      rid: "0c6f0f84-1b2a-4c1e-8f0e-000000000007",
+      label: "SSH from WAN",
+      secret_extra: "should not pass",
+    });
+    expect(e).toMatchObject({ action: "block", interface: "vtnet1", protocol: "tcp", src: "203.0.113.9", srcPort: "51234", dstPort: "22", length: "60", ruleId: "0c6f0f84-1b2a-4c1e-8f0e-000000000007", ruleLabel: "SSH from WAN" });
+    expect(Object.keys(e)).not.toContain("secret_extra");
+  });
+  it("copes with missing fields and caps long values", () => {
+    const e = logEntryFromRecord({ label: "x".repeat(1000), action: undefined });
+    expect(e.ruleLabel).toHaveLength(256);
+    expect(e.action).toBe("");
+    expect(e.protocol).toBe("");
   });
 });

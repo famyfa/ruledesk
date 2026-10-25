@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isAddressLiteral, isPortLiteral, validateAliasEntries, validateAliasName } from "@ruledeck/core";
 
 /**
@@ -128,6 +128,9 @@ export class MockState {
   rules = new Map<string, RawRecord>();
   aliases = new Map<string, RawRecord>();
   categories = new Map<string, MockCategory>();
+  /** Firewall log, newest first. Each row has the fields of the real filterlog parser. */
+  logRows: RawRecord[] = [];
+  private logCounter = 0;
   dmzKey: string;
   private salt?: string;
   legacyRules: RawRecord[] = [];
@@ -148,6 +151,57 @@ export class MockState {
     ];
     if (this.dmzKey !== "opt1") this.interfaces.splice(2, 0, { key: "opt1", descr: "GUEST" });
     this.seed();
+    this.seedLog();
+  }
+
+  /** Add a log line for the given rule (or none). Newest first, like the firewall returns them. */
+  addLog(partial: RawRecord = {}, at = new Date()): RawRecord {
+    this.logCounter++;
+    const n = this.logCounter;
+    const row: RawRecord = {
+      rulenr: "1",
+      subrulenr: "",
+      anchorname: "",
+      rid: "0",
+      interface: "vtnet0",
+      reason: "match",
+      action: "pass",
+      dir: "in",
+      ipversion: "4",
+      protonum: "6",
+      protoname: "tcp",
+      length: "60",
+      src: `192.168.1.${10 + (n % 200)}`,
+      dst: "10.0.0.5",
+      srcport: String(40000 + n),
+      dstport: "443",
+      tcpflags: "S",
+      label: "",
+      ...partial,
+    };
+    row.__timestamp__ = at.toISOString().slice(0, 19);
+    row.__host__ = "mock-fw";
+    row.__digest__ = createHash("md5").update(`${row.__timestamp__}|${n}|${row.src}|${row.dst}|${row.dstport}`).digest("hex");
+    this.logRows.unshift(row);
+    return row;
+  }
+
+  private seedLog() {
+    const rules = [...this.rules.entries()];
+    const now = Date.now();
+    for (let i = 0; i < 30; i++) {
+      const [uuid, rule] = rules[(29 - i) % rules.length]!;
+      this.addLog(
+        {
+          rid: uuid,
+          label: rule.description ?? "",
+          action: rule.action === "block" ? "block" : "pass",
+          interface: rule.interface === this.dmzKey ? "vtnet2" : rule.interface === "wan" ? "vtnet1" : "vtnet0",
+          dstport: rule.destination_port && /^\d+$/.test(rule.destination_port) ? rule.destination_port : String([443, 80, 53, 22][i % 4]),
+        },
+        new Date(now - (30 - i) * 15_000),
+      );
+    }
   }
 
   private id(u: string) {
