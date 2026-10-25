@@ -108,7 +108,7 @@ function timeOf(t: string): string {
 
 export function MonitorPage({ onShowRule }: { onShowRule: (ruleId: string) => void }) {
   const { site, sites, siteId, wc } = useWorkspace();
-  const [scope, setScope] = useState<"site" | "all">("site");
+  const [scope, setScope] = useState<"site" | "all">(() => (sites.filter((s) => s.signedIn).length > 1 ? "all" : "site"));
   const [paused, setPaused] = useState(false);
   const [clearedAt, setClearedAt] = useState(0);
   const [expr, setExpr] = useState("");

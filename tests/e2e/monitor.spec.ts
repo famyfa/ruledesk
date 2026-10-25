@@ -7,6 +7,8 @@ const inject = (base: string, rows: object[]) =>
 async function openMonitor(page: Page) {
   await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Monitor" }).click();
   await expect(page.getByRole("navigation", { name: "Monitor sections" }).getByRole("button", { name: "Firewall Log" })).toBeVisible();
+  // with two sites signed in the log starts merged; these tests look at one site
+  await page.getByRole("combobox", { name: "Log scope" }).selectOption("site");
 }
 
 test.describe("Monitor: firewall log", () => {
