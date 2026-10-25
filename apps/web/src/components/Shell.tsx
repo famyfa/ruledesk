@@ -7,14 +7,26 @@ import { SiteSignInDialog } from "./SignIn.tsx";
 
 export type Page = "overview" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
-const NAV: { page: Page; label: string; icon: string }[] = [
-  { page: "overview", label: "Overview", icon: "◫" },
-  { page: "sites", label: "Sites", icon: "⛨" },
-  { page: "rules", label: "Firewall Rules", icon: "☰" },
-  { page: "aliases", label: "Aliases", icon: "⌘" },
-  { page: "changes", label: "Pending Changes", icon: "Δ" },
-  { page: "history", label: "History", icon: "⏱" },
-  { page: "settings", label: "Settings", icon: "⚙" },
+/**
+ * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
+ * tree on the left. Tabs without a tree open their single page directly.
+ */
+interface NavTab {
+  id: string;
+  label: string;
+  pages: { page: Page; label: string }[];
+  /** Show the left tree for this tab. */
+  tree?: boolean;
+}
+
+const TABS: NavTab[] = [
+  { id: "dashboard", label: "Dashboard", pages: [{ page: "overview", label: "Overview" }] },
+  { id: "policies", label: "Policies", tree: true, pages: [{ page: "rules", label: "Firewall Rules" }] },
+  { id: "objects", label: "Objects", tree: true, pages: [{ page: "aliases", label: "Aliases" }] },
+  { id: "sites", label: "Sites", pages: [{ page: "sites", label: "Sites" }] },
+  { id: "changes", label: "Changes", pages: [{ page: "changes", label: "Pending Changes" }] },
+  { id: "history", label: "History", pages: [{ page: "history", label: "History" }] },
+  { id: "settings", label: "Settings", pages: [{ page: "settings", label: "Settings" }] },
 ];
 
 /** Pages that show the loaded rules; the others work without a loaded site. */
@@ -52,6 +64,8 @@ export function Shell({
   const [confirmRefresh, setConfirmRefresh] = useState(false);
   const pending = changeSet?.changes.length ?? 0;
   const problems = validation?.errorCount ?? 0;
+  const activeTab = TABS.find((t) => t.pages.some((p) => p.page === page)) ?? TABS[0]!;
+  const counts: Partial<Record<Page, number>> = { rules: wc?.current.rules.length, aliases: wc?.current.aliases.length };
 
   // Global undo/redo when not typing in a field.
   useEffect(() => {
@@ -95,27 +109,41 @@ export function Shell({
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <nav className="sidebar" aria-label="Main">
+      <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden>
             ▦
           </span>
           RuleDeck
         </div>
-        <ul>
-          {NAV.map((n) => (
-            <li key={n.page}>
-              <button type="button" className={page === n.page ? "active" : ""} aria-current={page === n.page ? "page" : undefined} onClick={() => setPage(n.page)}>
-                <span className="nav-icon" aria-hidden>
-                  {n.icon}
-                </span>
-                <span className="nav-label">{n.label}</span>
-                {n.page === "changes" && pending > 0 && <span className="badge">{pending}</span>}
-              </button>
-            </li>
+        <nav className="tabs-nav" aria-label="Main">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={activeTab.id === t.id ? "active" : ""}
+              aria-current={activeTab.id === t.id ? "page" : undefined}
+              onClick={() => setPage(t.pages[0]!.page)}
+            >
+              {t.label}
+              {t.id === "changes" && pending > 0 && <span className="badge">{pending}</span>}
+            </button>
           ))}
-        </ul>
-        <div className="sidebar-foot">
+        </nav>
+        <div className="topbar-right">
+          <button
+            type="button"
+            className={`pending-button${pending ? " has-pending" : ""}`}
+            onClick={() => setDrawerOpen((o) => !o)}
+            aria-expanded={drawerOpen}
+            aria-controls="changes-drawer"
+          >
+            {pending} pending{problems > 0 && <span className="text-error"> · {problems} ⚠</span>}
+          </button>
+          <button type="button" className="primary" disabled={!pending || problems > 0} onClick={() => setPage("changes")} title={problems ? "Fix problems first" : "Review the changes before applying"}>
+            Review &amp; apply
+          </button>
+          <span className="sep" />
           <button type="button" className="ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle theme">
             {theme === "dark" ? "☀ Light" : "☾ Dark"}
           </button>
@@ -138,10 +166,26 @@ export function Shell({
             )}
           </div>
         </div>
-      </nav>
+      </header>
 
+      <div className="body">
+        {activeTab.tree && (
+          <nav className="tree" aria-label={`${activeTab.label} sections`}>
+            <h2>{activeTab.label}</h2>
+            <ul>
+              {activeTab.pages.map((p) => (
+                <li key={p.page}>
+                  <button type="button" className={page === p.page ? "active" : ""} aria-current={page === p.page ? "page" : undefined} onClick={() => setPage(p.page)}>
+                    {p.label}
+                    {counts[p.page] !== undefined && <span className="tree-count">{counts[p.page]}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
       <div className="main-col">
-        <header className="toolbar">
+        <div className="toolbar" role="toolbar" aria-label="Site and edit actions">
           {sites.length > 1 ? (
             <label className="fw-select">
               <span className="sr-only">Site</span>
@@ -202,19 +246,7 @@ export function Shell({
               ⟳ Refresh
             </button>
           )}
-          <button
-            type="button"
-            className={`pending-button${pending ? " has-pending" : ""}`}
-            onClick={() => setDrawerOpen((o) => !o)}
-            aria-expanded={drawerOpen}
-            aria-controls="changes-drawer"
-          >
-            {pending} pending{problems > 0 && <span className="text-error"> · {problems} ⚠</span>}
-          </button>
-          <button type="button" className="primary" disabled={!pending || problems > 0} onClick={() => setPage("changes")} title={problems ? "Fix problems first" : "Review the changes before applying"}>
-            Review &amp; apply
-          </button>
-        </header>
+        </div>
 
         {failedSites.length > 0 && !hideSignInErrors && (
           <div className="banner banner-warn" role="status">
@@ -281,6 +313,7 @@ export function Shell({
             />
           </section>
         )}
+      </div>
       </div>
 
       {promptSite && (

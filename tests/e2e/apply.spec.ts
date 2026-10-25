@@ -59,7 +59,7 @@ test.describe("apply to firewall", () => {
 
     // Reload the app: rule and alias come from the firewall and are still linked.
     await page.reload();
-    await page.getByRole("button", { name: "Firewall Rules" }).click();
+    await page.getByRole("button", { name: "Policies" }).click();
     await expect(page.getByRole("grid")).toBeVisible();
     const reloaded = page.getByRole("row").filter({ hasText: "Allow HTTPS to web servers" });
     await expect(reloaded.locator("td.col-destination .chip-alias")).toHaveText(/WEB_SERVERS/);
