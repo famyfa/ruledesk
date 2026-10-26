@@ -1,6 +1,6 @@
 # RuleDeck
 
-A self-hosted, Panorama-style management UI for **OPNsense**: firewall rules, aliases, services and HA for one or many sites, from one place.
+A self-hosted, centralized management UI for **OPNsense**: firewall rules, aliases, services and HA for one or many sites, from one place.
 
 Edit rules in a dense table and a tabbed form, create aliases while you write the rule, build a rule **once and apply it to every site**, review a readable diff, and only then send anything to the firewalls.
 
@@ -11,7 +11,7 @@ Edit rules in a dense table and a tabbed form, create aliases while you write th
 ## What it does
 
 **Firewall rules and aliases**
-- Rule table in real evaluation order, content-sized columns, rule name first (click to edit), Panorama-style filter expressions: `( addr.src in 10.0.0.0/8 ) and ( action eq block )`, aliases are looked into
+- Rule table in real evaluation order, content-sized columns, rule name first (click to edit), filter expressions: `( addr.src in 10.0.0.0/8 ) and ( action eq block )`, aliases are looked into
 - Tabbed rule form; create an alias right from the source/destination/port field
 - Copy/paste, clone, reorder (within OPNsense's rule groups), bulk edit, undo/redo; automatic rules are shown read-only (and hidden by default)
 - Everything is staged locally. Apply = review screen, lockout warnings, conflict detection, only changed fields written, activation, read-back verification
@@ -89,7 +89,5 @@ Contributions, issues and forks are welcome.
 ## Trademarks and affiliation
 
 RuleDeck is an independent, community project. It is **not affiliated with, endorsed by, or supported by Deciso B.V. or the OPNsense project**. OPNsense® is a registered trademark of Deciso B.V.; RuleDeck only talks to OPNsense through its public API and uses the name to say what it works with.
-
-Palo Alto Networks® and Panorama™ are trademarks of Palo Alto Networks, Inc. RuleDeck is not affiliated with Palo Alto Networks; "Panorama-style" only describes the kind of user interface.
 
 For problems with RuleDeck, please open an issue here, not with the OPNsense project or Deciso.

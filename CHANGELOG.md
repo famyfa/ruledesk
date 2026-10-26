@@ -6,8 +6,8 @@ First release candidate. Reads verified on OPNsense 26.7; writes on real firewal
 
 **Rules and aliases**
 - Rule table in evaluation order with content-sized columns; rule name first, click to edit
-- Tabbed rule form (Panorama style) with inline alias creation
-- Panorama-style filter expressions for rules, aliases and the log (CIDR and port ranges, alias expansion)
+- Tabbed rule form with inline alias creation
+- Filter expressions for rules, aliases and the log (CIDR and port ranges, alias expansion)
 - Copy/paste, clone, reorder within rule groups, bulk edit, undo/redo
 - Automatic rules read-only and hidden by default
 - Apply with review, lockout warnings, conflict detection, changed-fields-only writes, activation and read-back

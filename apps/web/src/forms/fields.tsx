@@ -4,7 +4,7 @@ import { BADGE, SuggestionList, useAliasDialog } from "./pickerParts.tsx";
 import { addressSuggestions, createAliasLabel, createAliasName, itemLabel, portSuggestions, resolveAddressToken, type ObjectContext, type Suggestion } from "../grid/objects.ts";
 
 /**
- * Form fields for the rule editor dialog (Panorama-style). Controlled: value + onChange.
+ * Form fields for the rule editor dialog. Controlled: value + onChange.
  * Address and port pickers offer existing objects and "Create alias", which opens the
  * alias form right there, without leaving the rule.
  */

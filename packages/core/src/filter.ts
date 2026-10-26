@@ -1,5 +1,5 @@
 /**
- * Panorama-style filter expressions, shared by the log monitor and the rule tables.
+ * Filter expressions, shared by the log monitor and the rule tables.
  *
  *   ( addr.src in 10.0.0.0/8 ) and ( action eq block ) and not port.dst eq 53
  *

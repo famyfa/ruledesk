@@ -1,5 +1,5 @@
 RuleDeck — Project Book
-A Panorama-inspired, spreadsheet-first management UI for OPNsense
+A centralized, spreadsheet-first management UI for OPNsense
 
 Project codename: RuleDeck
 Status: Initial product specification
@@ -8,7 +8,7 @@ Primary goal: Make OPNsense firewall policy management fast, visual, safe, and p
 
 1. Product vision
 
-Build a modern, self-hosted web application for managing OPNsense firewall policies through a spreadsheet-style interface inspired by Palo Alto Panorama.
+Build a modern, self-hosted web application for managing OPNsense firewall policies through a spreadsheet-style interface, in the spirit of centralized enterprise firewall management.
 
 The user likes OPNsense because it is free, capable, and self-hosted. The frustration is the administration experience: creating an alias, navigating away from the rule editor, configuring it, returning to the rule, and selecting it.
 
@@ -31,7 +31,7 @@ Never require cloud accounts, telemetry, or an external SaaS service.
 Homelab administrators running one or several OPNsense instances.
 Small businesses with a small firewall fleet.
 Network engineers who prefer working in policy tables rather than repeated forms.
-Administrators migrating from Palo Alto Panorama or similar centralized management systems.
+Administrators used to centralized firewall management systems.
 3. Core user experience
 3.1 Main screen
 
@@ -585,7 +585,7 @@ Automatically apply changes as the user types.
 Silently discard unsupported fields.
 Treat runtime alias-table entries as persistent aliases.
 Pretend that a successful API response always means the new rules are active.
-Implement a full Panorama feature set before the basic editor is reliable.
+Implement a full enterprise feature set before the basic editor is reliable.
 14. Claude Code working instructions
 
 Before coding, inspect this project book and create a concrete implementation plan.

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { login, resetMock, turnLogOn } from "./helpers.ts";
 
-/** Panorama-style navigation: tabs along the top, a tree on the left for sections with sub-pages. */
+/** Navigation: tabs along the top, a tree on the left for sections with sub-pages. */
 test.describe("navigation", () => {
   test.beforeEach(async () => {
     await resetMock();

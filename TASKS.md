@@ -115,13 +115,13 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 
 ## 10. UI rework (feedback 2026-10-25)
 - [x] Table columns size to their content: min width = longest value in the column (no truncation), horizontal scroll for the rest
-- [x] Replace inline cell editing with a Panorama/Palo Alto style rule editor: double-click (or Enter) on a row opens a form dialog with tabs (General, Source, Destination, Service/Port, Options/Advanced)
+- [x] Replace inline cell editing with a tabbed rule editor form: double-click (or Enter) on a row opens a form dialog with tabs (General, Source, Destination, Service/Port, Options/Advanced)
 - [x] Keep inline alias creation inside the form's source/destination pickers ("Create alias" without leaving the form)
 - [x] Same form style for aliases (alias editor dialog)
 - [x] Grid stays for viewing, selecting, reordering, bulk edit, copy/paste; editing happens in the form
 - [x] Feedback round 2: logging moved to the Advanced tab; alias picker = scrolling list + fixed "Create new alias" box; details side panel removed; Cancel in the rule form undoes everything done in it (including aliases created there); dropdowns no longer clipped by the dialog
 - [x] Bug: automatic rules sharing one reference showed as pending "modifications" (unique ids for read-only rules; they never take part in change detection; regression tests incl. E2E)
-- [x] Navigation like Panorama: top tabs (Dashboard, Policies, Objects, Sites, Changes, History, Settings), a left tree for tabs with sub-pages, pending/apply controls in the top bar, site switcher + undo/redo/refresh in a second row
+- [x] Navigation: top tabs (Dashboard, Policies, Objects, Sites, Changes, History, Settings), a left tree for tabs with sub-pages, pending/apply controls in the top bar, site switcher + undo/redo/refresh in a second row
 - [x] Monitor tab: live firewall log of the primary (polling by digest, filters, pause/clear, rule links, forbidden/missed handling; mock endpoint, client, server route with rate limit, unit + E2E tests)
 - [ ] Monitor: verify `diagnostics/firewall/log` against the live lab
 
@@ -130,7 +130,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Commit the work in progress (multi-site mock/client/server + certificate pinning + lab fixes) after fixing the 3 failing shared-apply tests
 
 ## 12. Filtering, sync and global views (feedback 2026-10-25)
-- [x] Panorama-style filter expressions (and/or/not, eq/neq/contains/in/notin, CIDR and port-range matching, alias expansion, suggestions, help list, readable syntax errors) for the log, rules and aliases
+- [x] Filter expressions (and/or/not, eq/neq/contains/in/notin, CIDR and port-range matching, alias expansion, suggestions, help list, readable syntax errors) for the log, rules and aliases
 - [x] Click a value in the log to filter on it (Shift+click excludes it)
 - [x] Sync aliases / rules from one site to another: matched by name or description, interfaces translated, needed aliases brought along, categories stay local; staged as pending changes at the target (nothing sent)
 - [x] Global monitor: log of all signed-in sites merged, with a Site column and a `site` filter

@@ -1347,7 +1347,7 @@ input[aria-invalid="true"] {
   background: var(--accent-soft);
 }
 
-/* ---------------------------------------------------------------- rule editor dialog (Panorama style) */
+/* ---------------------------------------------------------------- rule editor dialog */
 .modal.rule-editor {
   width: min(820px, 96vw);
   height: min(660px, 92vh); /* fixed, so the dialog doesn't jump between tabs */
@@ -1533,7 +1533,7 @@ input[aria-invalid="true"] {
 }
 
 
-/* ---------------------------------------------------------------- navigation (Panorama style) */
+/* ---------------------------------------------------------------- navigation */
 .shell {
   display: flex;
   flex-direction: column;

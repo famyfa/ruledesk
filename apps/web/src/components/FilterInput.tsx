@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { compileFilter, FILTER_OPS, type FilterEnv, type FilterFieldInfo, type FilterSyntaxError } from "@ruledeck/core";
 
 /**
- * Panorama-style filter box: type an expression such as
+ * Filter box: type an expression such as
  * `( addr.src in 10.0.0.0/8 ) and ( action eq block )`, get field/operator
  * suggestions while typing, and a help list of all fields. Plain words are a
  * free-text search.

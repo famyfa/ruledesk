@@ -11,7 +11,7 @@ import type { ObjectContext } from "../grid/objects.ts";
 import { AddressField, InterfacesField, PortField } from "./fields.tsx";
 
 /**
- * Panorama-style rule editor: one dialog with tabs. Nothing reaches the working
+ * Rule editor: one dialog with tabs. Nothing reaches the working
  * copy until OK, and OK applies everything as a single undo step.
  */
 

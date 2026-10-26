@@ -53,7 +53,7 @@ test.describe("Monitor: firewall log", () => {
     await expect(page.locator("table.log-table tbody tr")).toHaveCount(31);
   });
 
-  test("filters with Panorama-style expressions; Clear starts again", async ({ page }) => {
+  test("filters with filter expressions; Clear starts again", async ({ page }) => {
     await login(page);
     await openMonitor(page);
     const rows = page.locator("table.log-table tbody tr");

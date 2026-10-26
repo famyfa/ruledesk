@@ -9,7 +9,7 @@ import { HaBanner } from "./HaSwitch.tsx";
 export type Page = `service:${string}` | "certificates" | "shared-rules" | "shared-aliases" | "shared-apply" | "shared-drift" | "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 /**
- * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
+ * Navigation: tabs along the top; tabs with sub-pages also show a
  * tree on the left. Tabs without a tree open their single page directly.
  */
 interface NavTab {
