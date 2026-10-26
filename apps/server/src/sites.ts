@@ -86,37 +86,26 @@ export async function snapshotOf(s: SiteSession): Promise<FirewallSnapshot> {
   return { firewallId: s.siteId, loadedAt: new Date().toISOString(), ...res };
 }
 
-/** One apply per site at a time, across all users. */
-const applying = new Set<string>();
+/**
+ * One change per site at a time, across all users: a rule apply, a service apply and an HA
+ * switch never overlap on the same firewall (no apply while VIPs move, and vice versa).
+ */
+const busySites = new Set<string>();
 
-export async function applyToSite(s: SiteSession, wc: WorkingCopy, opts: { acknowledgeRisks: boolean }): Promise<ApplyResult> {
-  if (applying.has(s.siteId)) throw new OpnsenseError("rejected", "Another apply is already running for this site.");
-  applying.add(s.siteId);
+async function withSiteLock<T>(s: SiteSession, fn: () => Promise<T>): Promise<T> {
+  if (busySites.has(s.siteId)) throw new OpnsenseError("rejected", "Another change is already running for this site.");
+  busySites.add(s.siteId);
   try {
-    return await track(s, () => runApply(s.client, wc, opts));
+    return await track(s, fn);
   } finally {
-    applying.delete(s.siteId);
+    busySites.delete(s.siteId);
   }
 }
 
-/** HA switch under the same per-site lock as apply (no apply while VIPs move, and vice versa). */
-export async function haSwitchSite(s: SiteSession, enter: boolean): Promise<SwitchResult> {
-  if (applying.has(s.siteId)) throw new OpnsenseError("rejected", "Another change is already running for this site.");
-  applying.add(s.siteId);
-  try {
-    return await track(s, () => runSwitch(s.client, enter));
-  } finally {
-    applying.delete(s.siteId);
-  }
-}
+export const applyToSite = (s: SiteSession, wc: WorkingCopy, opts: { acknowledgeRisks: boolean }): Promise<ApplyResult> =>
+  withSiteLock(s, () => runApply(s.client, wc, opts));
 
-/** Apply staged changes of one service under the same per-site lock as rule applies. */
-export async function applyServiceToSite(s: SiteSession, def: ServiceDef, wc: ServiceWc): Promise<ServiceApplyResult> {
-  if (applying.has(s.siteId)) throw new OpnsenseError("rejected", "Another change is already running for this site.");
-  applying.add(s.siteId);
-  try {
-    return await track(s, () => runServiceApply(s.client, def, wc, s.siteId));
-  } finally {
-    applying.delete(s.siteId);
-  }
-}
+export const haSwitchSite = (s: SiteSession, enter: boolean): Promise<SwitchResult> => withSiteLock(s, () => runSwitch(s.client, enter));
+
+export const applyServiceToSite = (s: SiteSession, def: ServiceDef, wc: ServiceWc): Promise<ServiceApplyResult> =>
+  withSiteLock(s, () => runServiceApply(s.client, def, wc, s.siteId));

@@ -1,6 +1,6 @@
 # RuleDeck — Task Checklist
 
-Split from [Instructions.md](Instructions.md). Checked items are done; unchecked items are open.
+Split from the original spec ([docs/history/original-spec.md](docs/history/original-spec.md)). Checked items are done; unchecked items are open.
 Work order follows section 15 of the spec: discovery docs first, then Phase 1, then the smallest useful Phase 2.
 
 ## 0. Repo setup
@@ -16,7 +16,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [x] Threat model (credentials, sessions, privileged ops) — `docs/security.md`
 - [x] Mock API specification — `docs/mock-api.md`
 - [x] Executable acceptance tests for inline alias creation + rule editing
-- [x] Unresolved API questions & compatibility risks — `docs/open-questions.md`
+- [x] Unresolved API questions & compatibility risks — `docs/history/open-questions-early.md`
 - [x] Grid library choice documented (keyboard, clipboard, virtualization, a11y, license)
 
 ## 2. Phase 1 — Foundation

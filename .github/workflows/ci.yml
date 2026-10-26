@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ruledeck:ci .
+      - name: Container starts and answers
+        run: |
+          printf '{"version":1,"sites":[{"id":"a","name":"A","primary":{"url":"https://192.0.2.1"}}]}' > /tmp/topology.json
+          docker run -d --name rd -p 127.0.0.1:3000:3000 --read-only --tmpfs /tmp --cap-drop ALL \
+            -v /tmp/topology.json:/config/ruledeck.topology.json:ro ruledeck:ci
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3000/api/health && exit 0; sleep 1; done
+          docker logs rd; exit 1

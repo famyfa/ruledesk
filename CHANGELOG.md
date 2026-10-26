@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Server routes split into modules (`apps/server/src/routes/`); one per-site lock for all changes
+- Contributor docs: CONTRIBUTING.md, SECURITY.md, rewritten architecture and development guides; early planning documents moved to docs/history
+- GitHub: CI (typecheck, unit, E2E, Docker), CodeQL, Dependabot, issue and pull request templates; `dev` branch for development
+
 ## 1.0.0-rc.1 (2026-10-26)
 
 First release candidate. Reads verified on OPNsense 26.7; writes on real firewalls are being tested.

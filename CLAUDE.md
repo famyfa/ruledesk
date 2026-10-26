@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-RuleDeck: spreadsheet-first OPNsense rule editor. The product spec is [Instructions.md](Instructions.md). Progress is tracked in [TASKS.md](TASKS.md). Check items off there as they're finished.
+RuleDeck: centralized management UI for OPNsense (rules, aliases, services, multi-site). How it works: [docs/architecture.md](docs/architecture.md); contributing: [CONTRIBUTING.md](CONTRIBUTING.md). The original spec is in [docs/history/](docs/history/). Progress is tracked in [TASKS.md](TASKS.md). Check items off there as they're finished.
 
 ## Commands
 
@@ -11,11 +11,11 @@ RuleDeck: spreadsheet-first OPNsense rule editor. The product spec is [Instructi
 
 ## Structure
 
-- `packages/core`: domain types, validators, working copy (pure functions, undo/redo), diff, validation. Shared by browser and server
-- `packages/opnsense-client`: HTTP client, zod response schemas, adapter (raw ⇄ domain), version feature flags
-- `apps/server`: Fastify. Stores NOTHING (no DB, no credentials). Users sign in with OPNsense accounts; per-site firewall sessions live in memory (`auth.ts`, `sites.ts`). Sites come from a read-only topology file (`topology.ts`)
-- `apps/mock-opnsense`: mimics OPNsense 26.7 endpoints, `/__mock/*` for test control
-- `apps/web`: React. Grid (view/select/reorder/copy-paste) in `src/grid`; editing happens in dialogs in `src/forms` (rule editor with tabs, alias form); workspace state in `src/workspace.tsx`
+- `packages/core`: domain types, validators, working copy (pure functions, undo/redo), diff, validation, filter expressions, shared policy (`shared.ts`), service model + catalogue (`service*.ts`), HA rules (`ha.ts`). Shared by browser and server
+- `packages/opnsense-client`: HTTP client (TLS pinning, size cap), zod response schemas, adapter (raw ⇄ domain), version feature flags, every endpoint in `EP` (`client.ts`)
+- `apps/server`: Fastify. Stores NOTHING (no DB, no credentials). `app.ts` = security hooks + auth/CSRF; routes per area in `src/routes/`; apply pipelines in `apply.ts`, `service-apply.ts`, `shared-apply.ts`, `ha.ts`; per-site lock in `sites.ts`; read-only topology in `topology.ts`
+- `apps/mock-opnsense`: mimics OPNsense 26.7 endpoints (rules, aliases, services, CARP, log), `/__mock/*` for test control
+- `apps/web`: React. Grid in `src/grid`; dialogs in `src/forms`; pages in `src/pages`; per-site state in `src/workspace.tsx`, shared policy state in `src/shared.tsx`, service drafts in `src/serviceDrafts.ts`; icons only via `src/components/icons.tsx`
 
 ## Rules
 

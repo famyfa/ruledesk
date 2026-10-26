@@ -72,7 +72,8 @@ Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev**. This start
 | [docs/services.md](docs/services.md) | Services: what is covered, how changes work, secrets |
 | [docs/security.md](docs/security.md) | Threat model, privileges, security review |
 | [docs/api-compatibility.md](docs/api-compatibility.md) | Every OPNsense endpoint used, verified in source and on live firewalls |
-| [docs/architecture.md](docs/architecture.md), [docs/development.md](docs/development.md) | Working on the code |
+| [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture.md](docs/architecture.md), [docs/development.md](docs/development.md) | Working on the code: branches, structure, how to add an endpoint, a service or a page |
+| [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 | [CHANGELOG.md](CHANGELOG.md), [TASKS.md](TASKS.md) | What changed, what's next |
 
 ## Development
@@ -89,7 +90,7 @@ Every OPNsense endpoint RuleDeck uses is verified against the OPNsense source fo
 
 [MIT](LICENSE). Use it, change it, share it, sell it, as long as the copyright notice stays in. It comes **without any warranty**: RuleDeck changes firewalls, so test it on something disposable first and keep OPNsense's config history at hand.
 
-Contributions, issues and forks are welcome.
+Contributions, issues and forks are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests go to the `dev` branch; `main` holds releases.
 
 ## Trademarks and affiliation
 
