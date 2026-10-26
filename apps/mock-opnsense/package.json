@@ -1,6 +1,6 @@
 {
   "name": "@ruledeck/mock-opnsense",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,5 +14,6 @@
   "dependencies": {
     "@ruledeck/core": "*",
     "fastify": "^5.12.7"
-  }
+  },
+  "license": "MIT"
 }

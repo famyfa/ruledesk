@@ -168,10 +168,11 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 Must have
 - [x] Global create/edit -> apply to all sites (Global ▸ Shared rules / Shared aliases / Apply to all sites / Drift; per-site preview, lockout acks, HA sync checkbox, canary order, stop at first failure, per-site result timeline; E2E incl. failure at site 1 and 2). Lab topology has the interface map. Still open: "share an existing rule" and a live test on the lab. Original goal: create a rule or alias once in the Global view, choose sites (default: all), review the per-site diff, one "Apply to all sites" (first site as canary, stop at the first failure, per-site result timeline, HA sync checkbox, "Finish at site"). Backend (shared policy, preflight/apply) exists; the UI does not (section 9 open items)
 - [ ] Live write verification on the lab: rules apply, aliases, services (one per type), HA switch, shared apply; fix what the real firewalls show
-- [ ] Packaging: Docker image built and run for real, docker-compose with a TLS reverse proxy example, install/upgrade guide, health endpoint, version shown in the UI, LICENSE, CHANGELOG, tagged release
+- [x] LICENSE (MIT), CHANGELOG, version 1.0.0-rc.1 shown in Settings and /api/health, install/upgrade guide with reverse proxy examples (docs/install.md), README rewritten
+- [ ] Docker image built and run for real (Docker engine wasn't available on the dev machine), then tag v1.0.0
 - [ ] CI (GitHub Actions): typecheck, unit, E2E on the mock, image build, dependency audit
 - [x] Security review (2026-10-26): 1 medium + 4 low findings fixed (secrets in browser drafts, response size cap, interface map before sign-in, headers/HSTS, logout on shutdown); results and residual risks in docs/security.md
-- [ ] Operator docs: docs/multi-site.md (shared vs sync), first-run guide, topology file, privileges needed per feature, recovery
+- [x] Operator docs: docs/multi-site.md, docs/install.md (first steps, topology, settings, privileges, recovery, troubleshooting), docs/services.md, docs/security.md
 Should have
 - [ ] One place for all staged changes (rules, aliases, services, per site); sign-out warning counts all of them
 - [ ] Read-only users: show what they can't do up front instead of errors; TOTP/LDAP sign-in checked on the lab

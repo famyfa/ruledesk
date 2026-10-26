@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { HaCell } from "../components/HaSwitch.tsx";
 import { api, ApiError } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
@@ -159,8 +160,19 @@ export function HistoryPage() {
 export function SettingsPage() {
   const { site } = useWorkspace();
   const f = site?.info?.features ?? null;
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    api.health().then((h) => setVersion(h.version), () => setVersion(null));
+  }, []);
   return (
     <div className="settings">
+      <h2>About</h2>
+      <p>
+        RuleDeck {version ?? ""} · open source under the MIT license ·{" "}
+        <a href="https://github.com/famyfa/ruledesk" target="_blank" rel="noreferrer noopener">
+          github.com/famyfa/ruledesk
+        </a>
+      </p>
       <h2>Firewall capabilities</h2>
       {f ? (
         <dl className="kv">

@@ -1,26 +1,53 @@
 # RuleDeck
 
-A spreadsheet-first, self-hosted UI for managing **OPNsense** firewall rules and aliases, inspired by Palo Alto Panorama.
+A self-hosted, Panorama-style management UI for **OPNsense**: firewall rules, aliases, services and HA for one or many sites, from one place.
 
-Edit rules in one dense table, create aliases **inside the cell you're editing**, review a readable diff, and only then send anything to the firewall.
+Edit rules in a dense table and a tabbed form, create aliases while you write the rule, build a rule **once and apply it to every site**, review a readable diff, and only then send anything to the firewalls.
 
-> **Status: early development.** Everything works end to end against the bundled mock OPNsense, including apply with conflict detection and read-back verification. **It has not been tested against a real OPNsense yet**, so writes are disabled by default (`RULEDECK_ALLOW_WRITES=false`). See [PROJECT.md](PROJECT.md) and [TASKS.md](TASKS.md).
+> **Status: release candidate (1.0.0-rc.1).** Everything is covered by tests against the bundled mock OPNsense, and reads were verified against real OPNsense 26.7 firewalls. Writes on real firewalls are being tested now. Writes are **off by default** (`RULEDECK_ALLOW_WRITES=false`). Try it on a lab or a disposable OPNsense first.
+>
+> RuleDeck started as a best-effort fix for one admin's daily pain. Use it, fork it, improve it. See [License](#license).
 
-## Features so far
+## What it does
 
-- Rule grid in real firewall evaluation order, with sticky headers and key columns, virtualized for large rule sets
-- Spreadsheet keyboard model: arrows, Tab, Enter, Esc, typing to edit, copy/paste (including multi-cell TSV), Ctrl+Z/Ctrl+Y
-- Address and port pickers with autocomplete over aliases, interfaces, well-known ports and literal addresses
-- **Inline alias creation and editing** from a source/destination/port cell, with validation of pasted entry lists
-- Clone, add, delete, drag-and-drop or Alt+↑/↓ reordering (only within the same OPNsense rule group)
-- Bulk edit: action, enable/disable, logging, description prefix/suffix/replace
-- Modified, new, invalid and read-only rows are labelled with text, not only color
-- Everything is staged in a local working copy that survives reloads. Nothing is sent until you apply.
-- Apply: review screen with lockout warnings, explicit confirmation, conflict detection against changes made elsewhere, writes of only the changed fields, activation, read-back verification, and recovery steps if anything fails
-- Legacy and automatic rules are shown read-only. Unknown rule fields are preserved and editable in the details panel.
-- Dark and light themes
+**Firewall rules and aliases**
+- Rule table in real evaluation order, content-sized columns, rule name first (click to edit), Panorama-style filter expressions: `( addr.src in 10.0.0.0/8 ) and ( action eq block )`, aliases are looked into
+- Tabbed rule form; create an alias right from the source/destination/port field
+- Copy/paste, clone, reorder (within OPNsense's rule groups), bulk edit, undo/redo; automatic rules are shown read-only (and hidden by default)
+- Everything is staged locally. Apply = review screen, lockout warnings, conflict detection, only changed fields written, activation, read-back verification
 
-## Quick start (development, with the mock firewall)
+**Many sites**
+- **Shared policy:** create or edit a rule or alias once (with logical interfaces such as DMZ), then *Apply to all sites*: per-site preview, one site at a time, stops at the first failure, per-site result, optional HA sync. Drift view.
+- **Sync** a rule, alias or service entry from one site to another (staged there for review)
+- Compare rules and aliases across all sites
+
+**Services** (site configuration)
+- Edit: Kea DHCPv4/v6, Dnsmasq, Unbound DNS, gateways, static routes, VLANs, virtual IPs, syslog, cron. View: NAT, WireGuard, users and groups
+- Certificate expiry across all sites
+- Same safety model as rules; passwords and keys never reach the browser
+
+**Operations**
+- Live firewall log of one or all sites, with filter expressions and click-to-filter
+- HA status per site and a graceful **switchover** (CARP maintenance mode) with checks and read-back
+- Light and dark theme in OPNsense colors
+
+**What it doesn't do:** store anything. No database, no credentials, no local users. You sign in with **your own OPNsense account** (local, LDAP, RADIUS, TOTP: whatever the firewall uses) or an API key, and every change shows up in the firewall's config history under your name. RuleDeck has no automatic rollback; the firewall's config history is the recovery.
+
+## Install
+
+See **[docs/install.md](docs/install.md)** (Docker Compose, reverse proxy, OPNsense users, topology file, first sign-in, upgrades, troubleshooting).
+
+Short version:
+
+```sh
+git clone https://github.com/famyfa/ruledesk.git && cd ruledesk
+cp .env.example apps/server/.env
+cp ruledeck.topology.example.json ruledeck.topology.json   # list your firewalls
+docker compose up -d --build
+# open http://127.0.0.1:3000 and sign in with your OPNsense account
+```
+
+## Try it without a firewall
 
 Requires Node.js 22.13 or newer.
 
@@ -29,55 +56,32 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev** (an account on the mock firewalls). This starts:
-
-| Process | Address | Purpose |
-|---|---|---|
-| mock OPNsense ×2 | http://127.0.0.1:8443, :8444 | Two fake firewalls (sites Berlin and Munich) with seed rules and aliases |
-| server | http://127.0.0.1:3000 | RuleDeck backend (holds the API credentials) |
-| web | http://127.0.0.1:5173 | UI (Vite dev server, proxies `/api`) |
-
-## Connecting real firewalls
-
-RuleDeck stores nothing: no database, no credentials, no local users. You sign in with **your own OPNsense account** (local, LDAP, RADIUS, TOTP; whatever the firewall uses), or with an API key. Changes show up in each firewall's config history under your name.
-
-1. Copy `ruledeck.topology.example.json` to `ruledeck.topology.json` and list your sites (the primary firewall URL, and the HA secondary if any). This file contains no secrets.
-2. Copy `.env.example` to `apps/server/.env` and point `RULEDECK_TOPOLOGY_FILE` at the topology.
-3. If a firewall uses a self-signed certificate, export its CA and set `caFile` for it in the topology. TLS verification can't be turned off.
-4. Make sure your OPNsense users have the privileges listed in [docs/security.md](docs/security.md).
-
-Writes stay disabled until you set `RULEDECK_ALLOW_WRITES=true`. **Test against a disposable OPNsense VM first, never a production firewall.**
-
-## Running with Docker Compose
-
-```sh
-cp .env.example apps/server/.env
-cp ruledeck.topology.example.json ruledeck.topology.json   # list your firewalls
-docker compose up -d --build
-```
-
-Open http://127.0.0.1:3000 and sign in with your OPNsense account. The container serves the UI and API on one port, bound to localhost only, with a read-only filesystem, no volume and all capabilities dropped.
-
-Browsers only send the session cookie over HTTPS or `http://localhost`. To use RuleDeck from another machine, put a TLS reverse proxy in front of it. Don't expose it to the internet.
-
-## Tests
-
-```sh
-npm test            # unit + integration (Vitest, uses the mock)
-npx playwright test # end-to-end (starts the dev stack if needed)
-npm run typecheck
-```
+Open http://127.0.0.1:5173 and sign in with **admin / ruledeck-dev**. This starts two mock OPNsense firewalls (sites Berlin and Munich, each with a simulated HA peer), the server and the web app.
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md): structure and key decisions
-- [docs/api-compatibility.md](docs/api-compatibility.md): OPNsense endpoints by version
-- [docs/field-mapping.md](docs/field-mapping.md): OPNsense ⇄ domain model
-- [docs/security.md](docs/security.md): threat model and hardening
-- [docs/mock-api.md](docs/mock-api.md): the mock firewall
-- [docs/open-questions.md](docs/open-questions.md): unresolved API questions and risks
-- [docs/development.md](docs/development.md): working on the code
+| | |
+|---|---|
+| [docs/install.md](docs/install.md) | Installing and running RuleDeck, OPNsense preparation, troubleshooting |
+| [docs/multi-site.md](docs/multi-site.md) | Shared policy, sync, the interface map |
+| [docs/services.md](docs/services.md) | Services: what is covered, how changes work, secrets |
+| [docs/security.md](docs/security.md) | Threat model, privileges, security review |
+| [docs/api-compatibility.md](docs/api-compatibility.md) | Every OPNsense endpoint used, verified in source and on live firewalls |
+| [docs/architecture.md](docs/architecture.md), [docs/development.md](docs/development.md) | Working on the code |
+| [CHANGELOG.md](CHANGELOG.md), [TASKS.md](TASKS.md) | What changed, what's next |
+
+## Development
+
+```sh
+npm test             # unit + integration (Vitest, against the mock)
+npx playwright test  # end-to-end on its own stack with the mock firewalls
+npm run typecheck
+```
+
+Every OPNsense endpoint RuleDeck uses is verified against the OPNsense source for the target release and recorded in `docs/api-compatibility.md`; please keep it that way when adding features.
 
 ## License
 
-Not yet chosen.
+[MIT](LICENSE). Use it, change it, share it, sell it, as long as the copyright notice stays in. It comes **without any warranty**: RuleDeck changes firewalls, so test it on something disposable first and keep OPNsense's config history at hand.
+
+Contributions, issues and forks are welcome.

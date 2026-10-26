@@ -102,6 +102,7 @@ async function request<T>(method: "GET" | "POST", url: string, body?: unknown): 
 const site = (id: string) => `/api/sites/${encodeURIComponent(id)}`;
 
 export const api = {
+  health: () => request<{ status: string; version: string }>("GET", "/api/health"),
   topology: () => request<PublicTopology>("GET", "/api/topology"),
   async session() {
     const r = await request<SessionView>("GET", "/api/auth/session");

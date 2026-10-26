@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
@@ -17,6 +17,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 import { sharedApply, sharedPreflight } from "./shared-apply.ts";
 
 export const SESSION_COOKIE = "ruledeck_session";
+
+/** RuleDeck's version (root package.json), shown in the UI. */
+const VERSION = (() => {
+  try {
+    return (JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
 export const CSRF_HEADER = "x-csrf-token";
 
 declare module "fastify" {
@@ -206,7 +215,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   }
 
   // ------------------------------------------------------------------ auth
-  app.get("/api/health", async () => ({ status: "ok" }));
+  app.get("/api/health", async () => ({ status: "ok", version: VERSION }));
   app.get("/api/topology", async (req) => publicTopology(topology, !!req.session));
 
   app.post("/api/auth/login", async (req, reply) => {
