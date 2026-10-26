@@ -163,3 +163,20 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [ ] Field labels and types from the OPNsense model XML instead of guessing (drop-down vs multi-select, numbers)
 - [ ] More services: Monit, IDS, DHCP relay, router advertisements, traffic shaper, captive portal, OpenVPN, IPsec; NAT editing once its apply path is verified
 - [ ] Certificates: create / import / renew / assign (private keys must never be stored or logged)
+
+## 15. Release 1.0 (assessment 2026-10-26)
+Must have
+- [ ] Global create/edit -> apply to all sites: create a rule or alias once in the Global view, choose sites (default: all), review the per-site diff, one "Apply to all sites" (first site as canary, stop at the first failure, per-site result timeline, HA sync checkbox, "Finish at site"). Backend (shared policy, preflight/apply) exists; the UI does not (section 9 open items)
+- [ ] Live write verification on the lab: rules apply, aliases, services (one per type), HA switch, shared apply; fix what the real firewalls show
+- [ ] Packaging: Docker image built and run for real, docker-compose with a TLS reverse proxy example, install/upgrade guide, health endpoint, version shown in the UI, LICENSE, CHANGELOG, tagged release
+- [ ] CI (GitHub Actions): typecheck, unit, E2E on the mock, image build, dependency audit
+- [ ] Security review (sessions, CSRF, headers/CSP, rate limits, logs without secrets, dependency audit) and a short threat model in docs/security.md
+- [ ] Operator docs: docs/multi-site.md (shared vs sync), first-run guide, topology file, privileges needed per feature, recovery
+Should have
+- [ ] One place for all staged changes (rules, aliases, services, per site); sign-out warning counts all of them
+- [ ] Read-only users: show what they can't do up front instead of errors; TOTP/LDAP sign-in checked on the lab
+- [ ] Firewall versions: 25.7 and 26.1 compatibility checked or clearly marked unsupported
+- [ ] Browser-side error reporting for expired sessions mid-apply; empty and first-run states; accessibility pass
+Later
+- [ ] Compare a service across all sites; field types from the OPNsense model files; more services; NAT editing; certificate create/import/renew
+
