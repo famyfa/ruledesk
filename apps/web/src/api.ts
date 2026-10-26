@@ -21,7 +21,7 @@ export class ApiError extends Error {
 
 export interface PublicTopology {
   hash: string;
-  sites: { id: string; name: string; hasSecondary: boolean }[];
+  sites: { id: string; name: string; hasSecondary: boolean; interfaces: Record<string, { key: string; label: string }> | null }[];
   logicalInterfaces: string[];
 }
 
@@ -140,6 +140,8 @@ export const api = {
       current: { settings: wc.settings, grids: wc.grids },
     }),
   certificates: (id: string) => request<{ certificates: CertificateInfo[] }>("GET", `${site(id)}/certificates`),
+  sharedPreflight: (b: SharedBody) => request<{ plans: SitePlan[] }>("POST", "/api/shared/preflight", b),
+  sharedApply: (b: SharedBody) => request<{ result: SharedApplyResult }>("POST", "/api/shared/apply", { ...b, confirm: true }),
   ha: (id: string) => request<HaView>("GET", `${site(id)}/ha`),
   haSwitch: (id: string, enter: boolean) => request<{ result: HaSwitchResult }>("POST", `${site(id)}/ha/switch`, { enter }),
   apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
@@ -184,4 +186,41 @@ export interface ServiceApplyResult {
   state: { written: number; totalWrites: number; activated: boolean; verified: boolean };
   recovery?: string[];
   secretsNotVerified?: boolean;
+}
+
+export interface SitePlan {
+  siteId: string;
+  siteName: string;
+  status: "ready" | "up_to_date" | "blocked";
+  reasons: string[];
+  /** The site's changes as text. */
+  changes: string;
+  counts: { create: number; modify: number; delete: number; reorder: number };
+  notes: string[];
+  conflicts: Conflict[];
+  risks: RiskWarning[];
+  needsCategory: boolean;
+  ha: { configured: boolean; primaryOk: boolean | null; message?: string };
+}
+
+export interface SiteOutcome {
+  siteId: string;
+  siteName: string;
+  status: "applied" | "up_to_date" | "failed" | "partial" | "unverified" | "blocked" | "not_attempted";
+  result?: ApplyResult;
+  ha?: { step: "synced" | "skipped" | "failed"; message?: string };
+  sharedCheck?: string[];
+}
+
+export interface SharedApplyResult {
+  outcome: "success" | "success_with_warnings" | "partial" | "blocked" | "failed";
+  plans: SitePlan[];
+  sites: SiteOutcome[];
+}
+
+export interface SharedBody {
+  shared: { baseline: FirewallSnapshot; current: WorkingCopy["current"] };
+  sites: Record<string, { baseline: FirewallSnapshot }>;
+  acknowledgeRisks: Record<string, boolean>;
+  haSync: Record<string, boolean>;
 }

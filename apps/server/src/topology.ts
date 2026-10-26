@@ -125,7 +125,8 @@ export function loadTopology(path: string): Topology {
 export function publicTopology(t: Topology) {
   return {
     hash: t.hash,
-    sites: t.sites.map((s) => ({ id: s.id, name: s.name, hasSecondary: !!s.secondary })),
+    // The interface map is not secret (names, keys, labels); the browser needs it to build the shared policy view.
+    sites: t.sites.map((s) => ({ id: s.id, name: s.name, hasSecondary: !!s.secondary, interfaces: s.interfaces ?? null })),
     logicalInterfaces: Object.keys(t.sites[0]?.interfaces ?? {}),
   };
 }

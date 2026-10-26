@@ -6,7 +6,7 @@ import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
 import { HaBanner } from "./HaSwitch.tsx";
 
-export type Page = `service:${string}` | "certificates" | "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
+export type Page = `service:${string}` | "certificates" | "shared-rules" | "shared-aliases" | "shared-apply" | "shared-drift" | "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 /**
  * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
@@ -25,7 +25,19 @@ const TABS: NavTab[] = [
   { id: "monitor", label: "Monitor", tree: true, pages: [{ page: "monitor", label: "Firewall Log" }] },
   { id: "policies", label: "Policies", tree: true, pages: [{ page: "rules", label: "Firewall Rules" }] },
   { id: "objects", label: "Objects", tree: true, pages: [{ page: "aliases", label: "Aliases" }] },
-  { id: "global", label: "Global", tree: true, pages: [{ page: "global-rules", label: "Rules, all sites" }, { page: "global-aliases", label: "Aliases, all sites" }] },
+  {
+    id: "global",
+    label: "Global",
+    tree: true,
+    pages: [
+      { page: "shared-rules", label: "Shared rules", group: "Shared policy (all sites)" },
+      { page: "shared-aliases", label: "Shared aliases", group: "Shared policy (all sites)" },
+      { page: "shared-apply", label: "Apply to all sites", group: "Shared policy (all sites)" },
+      { page: "shared-drift", label: "Drift", group: "Shared policy (all sites)" },
+      { page: "global-rules", label: "Rules, all sites", group: "Compare sites" },
+      { page: "global-aliases", label: "Aliases, all sites", group: "Compare sites" },
+    ],
+  },
   {
     id: "services",
     label: "Services",
@@ -42,7 +54,7 @@ const TABS: NavTab[] = [
 ];
 
 /** Pages that show the loaded rules; the others work without a loaded site. */
-const NEEDS_WORKING_COPY = new Set<Page>(["overview", "rules", "aliases", "changes"]);
+const NEEDS_WORKING_COPY = new Set<Page>(["overview", "rules", "aliases", "changes", "shared-rules", "shared-aliases"]);
 
 function isTyping(el: EventTarget | null) {
   const t = el as HTMLElement | null;
@@ -77,7 +89,9 @@ export function Shell({
   const pending = changeSet?.changes.length ?? 0;
   const problems = validation?.errorCount ?? 0;
   const activeTab = TABS.find((t) => t.pages.some((p) => p.page === page)) ?? TABS[0]!;
-  const counts: Partial<Record<Page, number>> = { rules: wc?.current.rules.length, aliases: wc?.current.aliases.length };
+  const counts: Partial<Record<Page, number>> = ws.shared
+    ? { "shared-rules": wc?.current.rules.length, "shared-aliases": wc?.current.aliases.length }
+    : { rules: wc?.current.rules.length, aliases: wc?.current.aliases.length };
 
   // Global undo/redo when not typing in a field.
   useEffect(() => {
@@ -146,14 +160,14 @@ export function Shell({
           <button
             type="button"
             className={`pending-button${pending ? " has-pending" : ""}`}
-            onClick={() => setDrawerOpen((o) => !o)}
+            onClick={() => (ws.shared ? setPage("shared-apply") : setDrawerOpen((o) => !o))}
             aria-expanded={drawerOpen}
             aria-controls="changes-drawer"
           >
             {pending} pending{problems > 0 && <span className="text-error"> · {problems} ⚠</span>}
           </button>
-          <button type="button" className="primary" disabled={!pending || problems > 0} onClick={() => setPage("changes")} title={problems ? "Fix problems first" : "Review the changes before applying"}>
-            Review &amp; apply
+          <button type="button" className="primary" disabled={!pending || problems > 0} onClick={() => setPage(ws.shared ? "shared-apply" : "changes")} title={problems ? "Fix problems first" : ws.shared ? "Review the changes per site, then apply to all sites" : "Review the changes before applying"}>
+            {ws.shared ? "Review & apply to all" : "Review & apply"}
           </button>
           <span className="sep" />
           <button type="button" className="ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle theme">
@@ -199,7 +213,12 @@ export function Shell({
         )}
       <div className="main-col">
         <div className="toolbar" role="toolbar" aria-label="Site and edit actions">
-          {sites.length > 1 ? (
+          {ws.shared ? (
+            <div className="fw-select">
+              <span className="fw-name">Shared policy</span>
+              <span className="muted">applies to {ws.shared.siteNames.join(" + ") || "all sites"}</span>
+            </div>
+          ) : sites.length > 1 ? (
             <label className="fw-select">
               <span className="sr-only">Site</span>
               <select className="site-select" value={ws.siteId ?? ""} onChange={(e) => ws.selectSite(e.target.value)} aria-label="Site">
@@ -218,9 +237,11 @@ export function Shell({
               <span className="muted">{site?.host}</span>
             </div>
           )}
-          <span className={`conn conn-${conn.cls}`} role="status">
-            <span className="dot" aria-hidden /> {conn.text}
-          </span>
+          {!ws.shared && (
+            <span className={`conn conn-${conn.cls}`} role="status">
+              <span className="dot" aria-hidden /> {conn.text}
+            </span>
+          )}
           <span className="spacer" />
           <button type="button" className="ghost" disabled={!wc || !canUndo(wc)} onClick={() => edit(undo)} title="Undo (Ctrl+Z)">
             ↶ Undo

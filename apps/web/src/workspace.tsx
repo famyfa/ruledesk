@@ -68,7 +68,7 @@ function persistDraft(key: string, wc: WorkingCopy) {
 }
 
 /** Re-link current objects to baseline objects where they're equal, so "unchanged" detection by identity works after a reload. */
-function relink(baseline: FirewallSnapshot, current: WorkingCopy["current"]): WorkingCopy["current"] {
+export function relink(baseline: FirewallSnapshot, current: WorkingCopy["current"]): WorkingCopy["current"] {
   const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const baseRules = new Map(baseline.rules.map((r) => [r.id, r]));
   const baseAliases = new Map(baseline.aliases.map((a) => [a.id, a]));
@@ -99,7 +99,9 @@ export interface ApplyRecord {
   result: ApplyResult;
 }
 
-interface WorkspaceValue {
+export interface WorkspaceValue {
+  /** Set while the shared (all sites) policy is the working copy: the site-specific parts don't apply. */
+  shared?: { siteNames: string[] };
   sites: SiteView[];
   siteId: string | null;
   site: SiteView | null;
@@ -135,6 +137,7 @@ interface WorkspaceValue {
 }
 
 const Ctx = createContext<WorkspaceValue | null>(null);
+export const WorkspaceContext = Ctx;
 
 export function useWorkspace(): WorkspaceValue {
   const v = useContext(Ctx);

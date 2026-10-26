@@ -166,7 +166,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 
 ## 15. Release 1.0 (assessment 2026-10-26)
 Must have
-- [ ] Global create/edit -> apply to all sites: create a rule or alias once in the Global view, choose sites (default: all), review the per-site diff, one "Apply to all sites" (first site as canary, stop at the first failure, per-site result timeline, HA sync checkbox, "Finish at site"). Backend (shared policy, preflight/apply) exists; the UI does not (section 9 open items)
+- [x] Global create/edit -> apply to all sites (Global ▸ Shared rules / Shared aliases / Apply to all sites / Drift; per-site preview, lockout acks, HA sync checkbox, canary order, stop at first failure, per-site result timeline; E2E incl. failure at site 1 and 2). Lab topology has the interface map. Still open: "share an existing rule" and a live test on the lab. Original goal: create a rule or alias once in the Global view, choose sites (default: all), review the per-site diff, one "Apply to all sites" (first site as canary, stop at the first failure, per-site result timeline, HA sync checkbox, "Finish at site"). Backend (shared policy, preflight/apply) exists; the UI does not (section 9 open items)
 - [ ] Live write verification on the lab: rules apply, aliases, services (one per type), HA switch, shared apply; fix what the real firewalls show
 - [ ] Packaging: Docker image built and run for real, docker-compose with a TLS reverse proxy example, install/upgrade guide, health endpoint, version shown in the UI, LICENSE, CHANGELOG, tagged release
 - [ ] CI (GitHub Actions): typecheck, unit, E2E on the mock, image build, dependency audit

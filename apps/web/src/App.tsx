@@ -12,8 +12,10 @@ import { MonitorPage } from "./pages/MonitorPage.tsx";
 import { GlobalPage } from "./pages/GlobalPage.tsx";
 import { ServicePage } from "./pages/ServicePage.tsx";
 import { CertificatesPage } from "./pages/CertificatesPage.tsx";
+import { SharedApplyPage, SharedDriftPage } from "./pages/SharedPages.tsx";
+import { SharedProvider, SharedScope } from "./shared.tsx";
 
-const PAGES: Page[] = ["certificates", "overview", "global-rules", "global-aliases", "monitor", "sites", "rules", "aliases", "changes", "history", "settings"];
+const PAGES: Page[] = ["shared-rules", "shared-aliases", "shared-apply", "shared-drift", "certificates", "overview", "global-rules", "global-aliases", "monitor", "sites", "rules", "aliases", "changes", "history", "settings"];
 
 function pageFromHash(): Page {
   const h = location.hash.replace(/^#\/?/, "") as Page;
@@ -81,6 +83,8 @@ export function App() {
 
   return (
     <WorkspaceProvider session={session} onSession={setSession}>
+      <SharedProvider>
+      <SharedScope active={page.startsWith("shared-")}>
       <Shell
         page={page}
         setPage={setPage}
@@ -95,6 +99,10 @@ export function App() {
           setSession(null);
         }}
       >
+        {page === "shared-rules" && <RulesPage key="shared-rules" />}
+        {page === "shared-aliases" && <AliasesPage onShowRule={() => setPage("shared-rules")} />}
+        {page === "shared-apply" && <SharedApplyPage />}
+        {page === "shared-drift" && <SharedDriftPage />}
         {page === "rules" && <RulesPage key={focusRule ?? "rules"} initialActiveId={focusRule} />}
         {page === "aliases" && <AliasesPage onShowRule={showRule} />}
         {page.startsWith("service:") && serviceById(page.slice("service:".length)) && <ServicePage key={page} def={serviceById(page.slice("service:".length))!} />}
@@ -108,6 +116,8 @@ export function App() {
         {page === "history" && <HistoryPage />}
         {page === "settings" && <SettingsPage />}
       </Shell>
+      </SharedScope>
+      </SharedProvider>
     </WorkspaceProvider>
   );
 }

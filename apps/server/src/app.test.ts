@@ -71,7 +71,11 @@ describe("topology", () => {
     expect(t([site("a", "https://a", { interfaces: { LAN: { key: "lan", label: "LAN" }, DMZ: { key: "lan", label: "DMZ" } } })])).toThrow(/same key/);
     expect(t([{ ...site("a", "https://a"), password: "x" }])).toThrow(/Invalid topology/);
     const pub = publicTopology(parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { secondary: { url: "https://a2" } })] })));
-    expect(pub.sites[0]).toEqual({ id: "a", name: "a", hasSecondary: true });
+    expect(pub.sites[0]).toEqual({ id: "a", name: "a", hasSecondary: true, interfaces: null });
+    // The interface map is public (names, keys, labels), nothing else of a site is.
+    const withMap = publicTopology(parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { interfaces: { DMZ: { key: "opt1", label: "DMZ" } } })] })));
+    expect(withMap.sites[0]!.interfaces).toEqual({ DMZ: { key: "opt1", label: "DMZ" } });
+    expect(JSON.stringify(withMap)).not.toContain("https://a");
   });
 
   it("refuses old settings that would store secrets", () => {

@@ -1,7 +1,53 @@
 {
   "version": 1,
   "sites": [
-    { "id": "ber", "name": "Berlin (mock)", "primary": { "url": "http://127.0.0.1:8443" }, "secondary": { "url": "http://127.0.0.1:18443" } },
-    { "id": "muc", "name": "Munich (mock)", "primary": { "url": "http://127.0.0.1:8444" }, "secondary": { "url": "http://127.0.0.1:18444" } }
+    {
+      "id": "ber",
+      "name": "Berlin (mock)",
+      "primary": {
+        "url": "http://127.0.0.1:8443"
+      },
+      "secondary": {
+        "url": "http://127.0.0.1:18443"
+      },
+      "interfaces": {
+        "LAN": {
+          "key": "lan",
+          "label": "LAN"
+        },
+        "WAN": {
+          "key": "wan",
+          "label": "WAN"
+        },
+        "DMZ": {
+          "key": "opt1",
+          "label": "DMZ"
+        }
+      }
+    },
+    {
+      "id": "muc",
+      "name": "Munich (mock)",
+      "primary": {
+        "url": "http://127.0.0.1:8444"
+      },
+      "secondary": {
+        "url": "http://127.0.0.1:18444"
+      },
+      "interfaces": {
+        "LAN": {
+          "key": "lan",
+          "label": "LAN"
+        },
+        "WAN": {
+          "key": "wan",
+          "label": "WAN"
+        },
+        "DMZ": {
+          "key": "opt1",
+          "label": "DMZ"
+        }
+      }
+    }
   ]
 }

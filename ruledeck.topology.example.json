@@ -4,14 +4,46 @@
     {
       "id": "ber",
       "name": "Berlin",
-      "primary": { "url": "https://10.1.0.2", "caFile": "/certs/ber-ca.pem" },
-      "secondary": { "url": "https://10.1.0.3", "caFile": "/certs/ber-ca.pem" }
+      "primary": {
+        "url": "https://10.1.0.2",
+        "caFile": "/certs/ber-ca.pem"
+      },
+      "secondary": {
+        "url": "https://10.1.0.3",
+        "caFile": "/certs/ber-ca.pem"
+      },
+      "interfaces": {
+        "LAN": {
+          "key": "lan",
+          "label": "LAN"
+        },
+        "DMZ": {
+          "key": "opt1",
+          "label": "DMZ"
+        }
+      }
     },
     {
       "id": "muc",
       "name": "Munich",
-      "primary": { "url": "https://10.2.0.2", "caFile": "/certs/muc-ca.pem" },
-      "secondary": { "url": "https://10.2.0.3", "caFile": "/certs/muc-ca.pem" }
+      "primary": {
+        "url": "https://10.2.0.2",
+        "caFile": "/certs/muc-ca.pem"
+      },
+      "secondary": {
+        "url": "https://10.2.0.3",
+        "caFile": "/certs/muc-ca.pem"
+      },
+      "interfaces": {
+        "LAN": {
+          "key": "lan",
+          "label": "LAN"
+        },
+        "DMZ": {
+          "key": "opt2",
+          "label": "DMZ"
+        }
+      }
     }
   ]
 }
