@@ -9,17 +9,21 @@ on:
     - cron: "17 4 * * 1"
 
 permissions:
+  actions: read # needed by the CodeQL action on private repositories
   contents: read
   security-events: write
 
 jobs:
   analyze:
+    # Code scanning on a private repository needs GitHub Advanced Security (paid).
+    # Until the repository is public this job is skipped instead of failing.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           queries: security-extended
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
