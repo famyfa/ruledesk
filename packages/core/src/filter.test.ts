@@ -26,6 +26,13 @@ describe("ip ranges", () => {
     expect(parseIpRange("example.com")).toBeNull();
     expect(parseIpRange("10.0.0.300")).toBeNull();
     expect(parseIpRange("10.0.0.0/33")).toBeNull();
+    expect(parseIpRange("10.0.0.1 - 10.0.0.9")).toMatchObject({ v: 4 }); // spaces around the dash
+    expect(parseIpRange("10.0.0.1-10.0.0.9-10.0.0.20")).toBeNull();
+  });
+  it("stays fast on hostile input (no regex backtracking)", () => {
+    const start = Date.now();
+    for (const evil of ["a-".repeat(50_000) + "!", "1".repeat(100_000) + "-", "-".repeat(100_000), "a".repeat(100_000)]) parseIpRange(evil);
+    expect(Date.now() - start).toBeLessThan(200);
   });
 });
 

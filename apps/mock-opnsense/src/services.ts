@@ -112,8 +112,9 @@ function flattenBody(body: unknown, root: string): Item {
   const node = (body as Record<string, unknown> | null)?.[root];
   const out: Item = {};
   const walk = (n: unknown, path: string) => {
-    if (n && typeof n === "object") for (const [k, v] of Object.entries(n)) walk(v, path ? `${path}.${k}` : k);
-    else if (path) out[path] = String(n ?? "");
+    if (n && typeof n === "object") {
+      for (const [k, v] of Object.entries(n)) if (!["__proto__", "constructor", "prototype"].includes(k)) walk(v, path ? `${path}.${k}` : k);
+    } else if (path) out[path] = String(n ?? "");
   };
   walk(node, "");
   return out;

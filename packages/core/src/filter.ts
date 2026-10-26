@@ -197,10 +197,14 @@ function parseV6(input: string): bigint | null {
 /** Single IP, CIDR, or `a-b` range -> numeric range. Anything else (names) -> null. */
 export function parseIpRange(text: string): IpRange | null {
   const s = text.trim();
-  const range = /^([^/\s]+)\s*-\s*([^/\s]+)$/.exec(s);
-  if (range) {
-    const a = parseIpRange(range[1]!);
-    const b = parseIpRange(range[2]!);
+  // Longest real input is an IPv6 range; refusing longer text keeps every check linear.
+  if (s.length > 100) return null;
+  // `a-b` range. Split by hand: a regex here could backtrack badly on input like "a-a-a-a…".
+  const dash = s.indexOf("-");
+  if (dash !== -1) {
+    if (s.indexOf("-", dash + 1) !== -1 || s.includes("/")) return null;
+    const a = parseIpRange(s.slice(0, dash));
+    const b = parseIpRange(s.slice(dash + 1));
     if (a && b && a.v === b.v && a.lo <= b.hi) return { v: a.v, lo: a.lo, hi: b.hi };
     return null;
   }

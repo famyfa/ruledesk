@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Security**
+- Fixed: prototype pollution. A signed-in user could send a service field named `__proto__` (or `constructor`/`prototype`) and modify base objects of the server process. Field names are now validated on the server and refused by the core functions (found while triaging a CodeQL alert)
+- Fixed: an IP range check could be made slow with crafted input (regex backtracking)
+- CodeQL skips the mock firewall and tests, which are not shipped
+
+**Other**
 - Server routes split into modules (`apps/server/src/routes/`); one per-site lock for all changes
 - Contributor docs: CONTRIBUTING.md, SECURITY.md, rewritten architecture and development guides; early planning documents moved to docs/history
 - GitHub: CI (typecheck, unit, E2E, Docker), CodeQL, Dependabot, issue and pull request templates; `dev` branch for development

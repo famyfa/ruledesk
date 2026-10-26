@@ -108,3 +108,15 @@ Session handling (256-bit ids, rotation when privileges grow, idle/absolute time
 - Firewall sessions and API keys stay in server memory while a user is signed in (at most 8 h). JavaScript can't wipe strings from memory.
 - RuleDeck is meant for a management network behind a TLS reverse proxy. It is not hardened for direct internet exposure.
 
+## CodeQL findings (2026-10-26)
+
+The first CodeQL scan after the repository went public reported 11 alerts.
+
+| Alerts | Verdict |
+|---|---|
+| Prototype pollution pattern ("remote property injection") in the mock | The mock isn't shipped, but **the same pattern was in the production server** (`unflatten`, service apply). **Fixed** with tests: field names `__proto__`, `constructor`, `prototype` are refused on the server and in the core functions |
+| Polynomial regular expression in `filter.ts` (IP ranges) | **Fixed**: ranges are split by hand, input length is capped (test with hostile input) |
+| Missing rate limiting, insecure randomness, property injection in `apps/mock-opnsense` | Test-only code, not in the image. Excluded from scanning (`.github/codeql/codeql-config.yml`) |
+| Clear-text storage in `apps/web/src/serviceDrafts.ts` | False positive: secret fields are blanked before the draft is stored (E2E test "a typed secret is never written to browser storage") |
+| Disabling certificate validation in `apps/server/src/cli/fingerprint.ts` | By design: the tool reads an untrusted certificate so the operator can compare and pin it; it sends nothing. Never used by the server |
+

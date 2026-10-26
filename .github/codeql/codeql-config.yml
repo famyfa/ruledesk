@@ -1,0 +1,6 @@
+# Code that never ships: the mock firewall used by tests, the tests themselves.
+# (The Docker image contains only packages/ and apps/server/src plus the built web app.)
+paths-ignore:
+  - apps/mock-opnsense
+  - tests
+  - "**/*.test.ts"

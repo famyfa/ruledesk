@@ -434,3 +434,21 @@ describe("security headers", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
   });
 });
+
+describe("prototype pollution through a service apply", () => {
+  it("rejects __proto__ field names before anything runs, and the server stays clean", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") }, "10.8.8.1");
+    const snap = (await app.inject({ method: "GET", url: "/api/sites/ber/services/dnsmasq", headers: { cookie } })).json().snapshot;
+    for (const field of ["__proto__.polluted", "constructor.prototype.polluted"]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/sites/ber/services/dnsmasq/apply",
+        headers: { cookie, [CSRF_HEADER]: csrf },
+        payload: { baseline: { ...snap, options: {}, defaults: {} }, current: { settings: { ...snap.settings, [field]: "x" }, grids: snap.grids } },
+      });
+      expect(res.statusCode, field).toBe(400);
+      expect(res.json().error.message).toMatch(/Invalid key|not allowed/);
+    }
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});

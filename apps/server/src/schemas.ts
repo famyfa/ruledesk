@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSafeFieldPath } from "@ruledeck/core";
 
 /** Validation for working copies sent by the browser. Strings are length-limited. */
 
@@ -104,7 +105,10 @@ export const HaSwitchSchema = z.object({ enter: z.boolean() }).strict();
 // ---------------------------------------------------------------------------
 // Services (DHCP, DNS, gateways, ...)
 
-const FieldName = z.string().regex(/^[A-Za-z0-9_.\-]{1,100}$/);
+const FieldName = z
+  .string()
+  .regex(/^[A-Za-z0-9_.\-]{1,100}$/)
+  .refine(isSafeFieldPath, "field name not allowed"); // no __proto__ / constructor / prototype (prototype pollution)
 const ServiceItem = z.record(FieldName, z.string().max(8192));
 const ServiceRow = z.object({ id: z.string().min(1).max(80), item: ServiceItem });
 const ServiceGrids = z.record(z.string().max(40), z.array(ServiceRow).max(500));

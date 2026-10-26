@@ -79,7 +79,10 @@ export function flattenModel(node: unknown, prefix = ""): Flattened {
         return;
       }
       if (keys.length > 0 && keys.every((k) => UUID_RE.test(k))) return; // a table inside the tree
-      for (const k of keys) walk(n[k], path ? `${path}.${k}` : k);
+      for (const k of keys) {
+        if (FORBIDDEN_KEYS.has(k)) continue; // never let a firewall answer reach a prototype
+        walk(n[k], path ? `${path}.${k}` : k);
+      }
       return;
     }
     if (isSecretField(path)) {
@@ -93,15 +96,27 @@ export function flattenModel(node: unknown, prefix = ""): Flattened {
   return out;
 }
 
+/**
+ * Keys that would reach an object's prototype. Field names come from the browser and from
+ * firewalls, so they are refused (prototype pollution).
+ */
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** True when no segment of a dotted field path is a prototype key. */
+export function isSafeFieldPath(path: string): boolean {
+  return path.split(".").every((p) => !FORBIDDEN_KEYS.has(p));
+}
+
 /** `{ "general.enabled": "1" }` -> `{ general: { enabled: "1" } }` */
 export function unflatten(item: Item): Record<string, unknown> {
   const root: Record<string, unknown> = {};
   for (const [path, value] of Object.entries(item)) {
+    if (!isSafeFieldPath(path)) throw new Error(`Field name not allowed: ${path.slice(0, 100)}`);
     const parts = path.split(".");
     let cur = root;
     for (let i = 0; i < parts.length - 1; i++) {
       const p = parts[i]!;
-      if (!isObj(cur[p])) cur[p] = {};
+      if (!Object.hasOwn(cur, p) || !isObj(cur[p])) cur[p] = {};
       cur = cur[p] as Record<string, unknown>;
     }
     cur[parts[parts.length - 1]!] = value;
