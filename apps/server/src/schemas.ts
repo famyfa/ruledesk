@@ -100,3 +100,28 @@ export const SharedRequestSchema = z.object({
 });
 
 export const HaSwitchSchema = z.object({ enter: z.boolean() }).strict();
+
+// ---------------------------------------------------------------------------
+// Services (DHCP, DNS, gateways, ...)
+
+const FieldName = z.string().regex(/^[A-Za-z0-9_.\-]{1,100}$/);
+const ServiceItem = z.record(FieldName, z.string().max(8192));
+const ServiceRow = z.object({ id: z.string().min(1).max(80), item: ServiceItem });
+const ServiceGrids = z.record(z.string().max(40), z.array(ServiceRow).max(500));
+
+export const ServiceApplySchema = z
+  .object({
+    baseline: z.object({
+      serviceId: z.string().max(40),
+      siteId: z.string().max(64),
+      loadedAt: z.string().max(40),
+      settings: ServiceItem.nullable(),
+      grids: ServiceGrids,
+      options: z.record(z.string(), z.unknown()).default({}),
+      defaults: z.record(z.string(), z.unknown()).default({}),
+      secrets: z.array(z.string().max(100)).max(200),
+      fingerprints: z.record(z.string().max(160), z.string().max(64)),
+    }),
+    current: z.object({ settings: ServiceItem.nullable(), grids: ServiceGrids }),
+  })
+  .strict();

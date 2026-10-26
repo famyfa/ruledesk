@@ -1,3 +1,13 @@
+import {
+  flattenModel,
+  itemFingerprint,
+  unflatten,
+  type CertificateInfo,
+  type GridDef,
+  type Item,
+  type ServiceDef,
+  type ServiceSnapshot,
+} from "@ruledeck/core";
 import type { Alias, FirewallLogEntry, HaState, FirewallRule, InterfaceInfo, SelectionOptions } from "@ruledeck/core";
 import { OpnsenseError } from "./errors.ts";
 import { OpnsenseHttp, type ConnectionConfig } from "./http.ts";
@@ -56,6 +66,8 @@ export const EP = {
   // High availability (CARP). Verified in the 26.7 source and read-only on the lab, see docs/api-compatibility.md
   vipStatus: "diagnostics/interface/get_vip_status",
   carpStatus: "diagnostics/interface/carp_status",
+  certSearch: "trust/cert/search",
+  caSearch: "trust/ca/search",
 } as const;
 
 const PAGE = 500;
@@ -371,5 +383,139 @@ export class OpnsenseClient {
     } catch {
       return false;
     }
+  }
+
+  // ---------------------------------------------------------------- services (generic OPNsense MVC models)
+
+  private static readonly UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  private static readonly MAX_ROWS = 500;
+
+  private async readRoot(endpoint: string, root: string, params: string[] = []) {
+    const raw = (await this.http.get(endpoint, { params })) as Record<string, unknown> | null;
+    const node = raw?.[root];
+    if (!node || typeof node !== "object") {
+      throw new OpnsenseError("protocol", `Unexpected response shape from ${endpoint}: expected "${root}".`, { endpoint });
+    }
+    return flattenModel(node);
+  }
+
+  /** Read a whole service: its settings tree and every table, as flat maps. Secret fields come back empty. */
+  async readServiceSnapshot(def: ServiceDef, siteId: string): Promise<ServiceSnapshot> {
+    const snap: ServiceSnapshot = {
+      serviceId: def.id,
+      siteId,
+      loadedAt: new Date().toISOString(),
+      settings: null,
+      grids: {},
+      options: {},
+      defaults: {},
+      secrets: [],
+      fingerprints: {},
+    };
+    const secrets = new Set<string>();
+    if (def.settings) {
+      const f = await this.readRoot(def.settings.get, def.settings.root);
+      snap.settings = f.values;
+      snap.fingerprints.settings = itemFingerprint(f.values);
+      for (const [k, v] of Object.entries(f.options)) snap.options[`settings:${k}`] = v;
+      f.secrets.forEach((x) => secrets.add(x));
+    }
+    for (const g of def.grids) {
+      const rows = (await this.searchAll(g.search)).filter((r) => typeof r.uuid === "string" && OpnsenseClient.UUID.test(r.uuid));
+      if (rows.length > OpnsenseClient.MAX_ROWS) {
+        throw new OpnsenseError("protocol", `${g.label} has more than ${OpnsenseClient.MAX_ROWS} entries; RuleDeck doesn't load that many.`, { endpoint: g.search });
+      }
+      const defaults = await this.readRoot(g.get, g.root);
+      snap.defaults[g.id] = defaults.values;
+      for (const [k, v] of Object.entries(defaults.options)) snap.options[`${g.id}:${k}`] = v;
+      defaults.secrets.forEach((x) => secrets.add(x));
+      const items: { id: string; item: Item }[] = [];
+      for (let i = 0; i < rows.length; i += 8) {
+        const batch = await Promise.all(
+          rows.slice(i, i + 8).map(async (r) => {
+            const id = r.uuid as string;
+            const f = await this.readRoot(g.get, g.root, [id]);
+            f.secrets.forEach((x) => secrets.add(x));
+            for (const [k, v] of Object.entries(f.options)) snap.options[`${g.id}:${k}`] ??= v;
+            return { id, item: f.values };
+          }),
+        );
+        items.push(...batch);
+      }
+      snap.grids[g.id] = items;
+      for (const it of items) snap.fingerprints[`${g.id}:${it.id}`] = itemFingerprint(it.item);
+    }
+    snap.secrets = [...secrets].sort();
+    return snap;
+  }
+
+  private async saveGeneric(endpoint: string, root: string, patch: Item, params: string[] = []): Promise<string | undefined> {
+    const raw = (await this.http.post(endpoint, { params, body: { [root]: unflatten(patch) } })) as { result?: unknown; uuid?: unknown; validations?: unknown } | null;
+    if (raw?.result !== "saved") {
+      const v = raw?.validations && typeof raw.validations === "object" ? (raw.validations as Record<string, string | string[]>) : undefined;
+      const detail = v ? " " + Object.entries(v).map(([k, m]) => `${k}: ${Array.isArray(m) ? m.join(", ") : m}`).join("; ") : "";
+      throw new OpnsenseError("rejected", `The firewall did not save the change (${String(raw?.result ?? "no answer")}).${detail}`, { endpoint, validations: v });
+    }
+    return typeof raw.uuid === "string" ? raw.uuid : undefined;
+  }
+
+  async saveServiceSettings(def: ServiceDef, patch: Item): Promise<void> {
+    if (!def.settings) throw new OpnsenseError("rejected", `${def.label} has no general settings.`);
+    await this.saveGeneric(def.settings.set, def.settings.root, patch);
+  }
+
+  async addServiceItem(g: GridDef, patch: Item): Promise<string> {
+    const uuid = await this.saveGeneric(g.add, g.root, patch);
+    if (!uuid) throw new OpnsenseError("protocol", `${g.add} returned no uuid.`, { endpoint: g.add });
+    return uuid;
+  }
+
+  async setServiceItem(g: GridDef, uuid: string, patch: Item): Promise<void> {
+    await this.saveGeneric(g.set, g.root, patch, [uuid]);
+  }
+
+  async deleteServiceItem(g: GridDef, uuid: string): Promise<void> {
+    const raw = (await this.http.post(g.del, { params: [uuid] })) as { result?: unknown } | null;
+    if (raw?.result !== "deleted") throw new OpnsenseError("rejected", `The firewall did not delete the entry (${String(raw?.result ?? "no answer")}).`, { endpoint: g.del });
+  }
+
+  /** Activate the saved configuration of a service. */
+  async reconfigureService(def: ServiceDef): Promise<void> {
+    if (!def.reconfigure) return;
+    const raw = (await this.http.post(def.reconfigure)) as { status?: unknown } | null;
+    if (String(raw?.status ?? "").toLowerCase() !== "ok") {
+      throw new OpnsenseError("rejected", `The firewall did not activate the change (${String(raw?.status ?? "no answer")}).`, { endpoint: def.reconfigure });
+    }
+  }
+
+  // ---------------------------------------------------------------- certificates (read-only, whitelisted)
+
+  /**
+   * Certificates and CAs for the expiry overview. The firewall's list includes private
+   * keys and PEM payloads; only the fields named here are kept, nothing else leaves this method.
+   */
+  async listCertificates(): Promise<CertificateInfo[]> {
+    const iso = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : null;
+    };
+    const s = (v: unknown, max = 200) => (typeof v === "string" || typeof v === "number" ? String(v).slice(0, max) : "");
+    const map = (isCa: boolean) => (r: Record<string, unknown>): CertificateInfo => ({
+      uuid: s(r.uuid, 64),
+      refid: s(r.refid, 64),
+      description: s(r.descr),
+      commonName: s(r.commonname),
+      subject: s(r.name),
+      type: s(r.cert_type, 32),
+      validFrom: iso(r.valid_from),
+      validTo: iso(r.valid_to),
+      inUse: r.in_use === 1 || r.in_use === "1" || r.in_use === true,
+      caRef: s(r.caref, 64),
+      altNames: [s(r.altnames_dns), s(r.altnames_ip)].flatMap((x) => x.split(/[\n,]+/)).map((x) => x.trim()).filter(Boolean).slice(0, 10),
+      isCa,
+    });
+    const certs = (await this.searchAll(EP.certSearch)).map(map(false));
+    const cas = (await this.searchAll(EP.caSearch)).map(map(true));
+    return [...certs, ...cas];
   }
 }

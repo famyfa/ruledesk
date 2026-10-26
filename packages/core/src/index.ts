@@ -12,3 +12,5 @@ export * from "./filter.ts";
 export * from "./filter-records.ts";
 export * from "./sync.ts";
 export * from "./ha.ts";
+export * from "./service-catalog.ts";
+export * from "./service.ts";

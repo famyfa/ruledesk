@@ -1,3 +1,4 @@
+import { MockServices } from "./services.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { isAddressLiteral, isPortLiteral, validateAliasEntries, validateAliasName } from "@ruledeck/core";
 
@@ -132,6 +133,7 @@ export class MockState {
   logRows: RawRecord[] = [];
   private logCounter = 0;
   /** CARP as `interface show carp` reports it (see carp_set_status.php). */
+  services = new MockServices();
   carp = {
     maintenance: false,
     allow: true,

@@ -1,3 +1,5 @@
+import { runServiceApply, type ServiceApplyResult } from "./service-apply.ts";
+import type { ServiceDef, ServiceWc } from "@ruledeck/core";
 import { runSwitch, type SwitchResult } from "./ha.ts";
 import type { FirewallSnapshot, WorkingCopy } from "@ruledeck/core";
 import {
@@ -103,6 +105,17 @@ export async function haSwitchSite(s: SiteSession, enter: boolean): Promise<Swit
   applying.add(s.siteId);
   try {
     return await track(s, () => runSwitch(s.client, enter));
+  } finally {
+    applying.delete(s.siteId);
+  }
+}
+
+/** Apply staged changes of one service under the same per-site lock as rule applies. */
+export async function applyServiceToSite(s: SiteSession, def: ServiceDef, wc: ServiceWc): Promise<ServiceApplyResult> {
+  if (applying.has(s.siteId)) throw new OpnsenseError("rejected", "Another change is already running for this site.");
+  applying.add(s.siteId);
+  try {
+    return await track(s, () => runServiceApply(s.client, def, wc, s.siteId));
   } finally {
     applying.delete(s.siteId);
   }

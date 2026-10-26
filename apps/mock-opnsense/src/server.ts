@@ -1,3 +1,4 @@
+import { registerServiceRoutes } from "./services.ts";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import {
   ALIAS_DEFAULTS,
@@ -415,6 +416,8 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     state.setCategory(req.params.uuid, body.category ?? {});
     return { result: "saved" };
   });
+
+  registerServiceRoutes(app, () => state.services);
 
   // ---------------------------------------------------------------- CARP (diagnostics/interface)
   const vipStatus = async () => {

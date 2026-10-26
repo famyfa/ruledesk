@@ -7,10 +7,13 @@ import { z } from "zod";
 import { OpnsenseError } from "@ruledeck/opnsense-client";
 import type { AppConfig } from "./config.ts";
 import { RateLimiter, safeEqual, SessionStore, track, type Session, type SiteSession } from "./auth.ts";
-import { applyToSite, endSiteSession, haSwitchSite, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
+import { applyServiceToSite, applyToSite, endSiteSession, haSwitchSite, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
 import { readHa } from "./ha.ts";
 import { publicTopology, type SiteConfig } from "./topology.ts";
-import { ApplyRequestSchema, HaSwitchSchema, SharedRequestSchema } from "./schemas.ts";
+import { ApplyRequestSchema, HaSwitchSchema, ServiceApplySchema, SharedRequestSchema } from "./schemas.ts";
+import { isNewId, serviceById, type ServiceWc } from "@ruledeck/core";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { sharedApply, sharedPreflight } from "./shared-apply.ts";
 
 export const SESSION_COOKIE = "ruledeck_session";
@@ -315,6 +318,64 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const result = await withSite(s, reply, () => track(s, () => s.client.readFirewallLog({ limit: q.data.limit, sinceDigest: q.data.digest })));
     if (!result) return;
     return result;
+  });
+
+  /** Certificates and CAs of the site (expiry overview). Only whitelisted fields; the firewall's list also contains private keys. */
+  app.get("/api/sites/:id/certificates", async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    const certs = await withSite(s, reply, () => track(s, () => s.client.listCertificates()));
+    if (!certs) return;
+    return { certificates: certs };
+  });
+
+  /** One service (settings and tables) as flat maps; secret fields are empty. */
+  app.get("/api/sites/:id/services/:svc", async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    const def = serviceById((req.params as { svc: string }).svc);
+    if (!def) return reply.code(404).send({ error: { kind: "not_found", message: "Unknown service." } });
+    const snapshot = await withSite(s, reply, () => track(s, () => s.client.readServiceSnapshot(def, s.siteId)));
+    if (!snapshot) return;
+    return { snapshot, readOnly: !!def.readOnly };
+  });
+
+  app.post("/api/sites/:id/services/:svc/apply", { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    const def = serviceById((req.params as { svc: string }).svc);
+    if (!def) return reply.code(404).send({ error: { kind: "not_found", message: "Unknown service." } });
+    if (!applyLimiter.take(req.session!.id)) {
+      return reply.code(429).send({ error: { kind: "rate_limited", message: "Too many changes. Wait a minute." } });
+    }
+    if (!config.allowWrites || def.readOnly) {
+      return reply.code(403).send({
+        error: { kind: "writes_disabled", message: def.readOnly ? `${def.label} is read-only in RuleDeck.` : "Sending changes to firewalls is disabled on this server (RULEDECK_ALLOW_WRITES is not true)." },
+      });
+    }
+    const body = ServiceApplySchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: { kind: "bad_request", message: "Invalid change set: " + body.error.issues.slice(0, 3).map((i) => `${i.path.join(".")} ${i.message}`).join("; ") } });
+    }
+    const { baseline, current } = body.data;
+    if (baseline.siteId !== s.siteId || baseline.serviceId !== def.id) {
+      return reply.code(400).send({ error: { kind: "bad_request", message: "The changes were made for a different site or service." } });
+    }
+    const known = new Set(def.grids.map((g) => g.id));
+    for (const gid of [...Object.keys(baseline.grids), ...Object.keys(current.grids)]) {
+      if (!known.has(gid)) return reply.code(400).send({ error: { kind: "bad_request", message: `Unknown table "${gid}".` } });
+    }
+    for (const rows of Object.values(current.grids)) {
+      for (const r of rows) {
+        if (!isNewId(r.id) && !UUID_RE.test(r.id)) return reply.code(400).send({ error: { kind: "bad_request", message: "Invalid entry id." } });
+      }
+    }
+    const wc = { baseline: { ...baseline, options: {}, defaults: {} } as ServiceWc["baseline"], settings: current.settings, grids: current.grids } as ServiceWc;
+    const result = await withSite(s, reply, () => applyServiceToSite(s, def, wc));
+    if (!result) return;
+    // Counts only: change contents can include secrets.
+    req.log.info({ event: "service_apply", site: s.siteId, service: def.id, user: s.user, outcome: result.outcome, writes: `${result.state.written}/${result.state.totalWrites}`, verified: result.state.verified }, "service apply finished");
+    return { result };
   });
 
   /** HA state of the site's primary node (CARP VIPs, maintenance mode, peer reachable) with the switch checks. */
