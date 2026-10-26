@@ -11,7 +11,9 @@ const instances = [
 ];
 
 for (const inst of instances) {
-  const { app } = buildMockServer({ version: process.env.MOCK_VERSION, logger: process.env.MOCK_LOG === "1", autoLog: process.env.MOCK_AUTOLOG !== "0" });
+  const opts = { version: process.env.MOCK_VERSION, logger: process.env.MOCK_LOG === "1", autoLog: process.env.MOCK_AUTOLOG !== "0" };
+  const { app, linkSecondary } = buildMockServer(opts);
+  linkSecondary(buildMockServer({ version: process.env.MOCK_VERSION })); // the HA peer (answers in-process, no port)
   await app.listen({ port: inst.port, host });
   console.log(`Mock OPNsense "${inst.name}" on http://${host}:${inst.port} (sign in as admin / ruledeck-dev)`);
 }

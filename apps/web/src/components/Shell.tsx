@@ -4,6 +4,7 @@ import { useWorkspace } from "../workspace.tsx";
 import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
+import { HaBanner } from "./HaSwitch.tsx";
 
 export type Page = "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
@@ -249,6 +250,8 @@ export function Shell({
             </button>
           )}
         </div>
+
+        <HaBanner onGo={() => setPage("sites")} />
 
         {failedSites.length > 0 && !hideSignInErrors && (
           <div className="banner banner-warn" role="status">

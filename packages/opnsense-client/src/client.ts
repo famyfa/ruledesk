@@ -1,4 +1,4 @@
-import type { Alias, FirewallLogEntry, FirewallRule, InterfaceInfo, SelectionOptions } from "@ruledeck/core";
+import type { Alias, FirewallLogEntry, HaState, FirewallRule, InterfaceInfo, SelectionOptions } from "@ruledeck/core";
 import { OpnsenseError } from "./errors.ts";
 import { OpnsenseHttp, type ConnectionConfig } from "./http.ts";
 import {
@@ -53,6 +53,9 @@ export const EP = {
   haRestartAll: "core/hasync_status/restart_all",
   // Monitoring (read-only; verified against 26.7.7 source: Diagnostics FirewallController::logAction)
   firewallLog: "diagnostics/firewall/log",
+  // High availability (CARP). Verified in the 26.7 source and read-only on the lab, see docs/api-compatibility.md
+  vipStatus: "diagnostics/interface/get_vip_status",
+  carpStatus: "diagnostics/interface/carp_status",
 } as const;
 
 const PAGE = 500;
@@ -324,5 +327,49 @@ export class OpnsenseClient {
       else missed = entries.length >= opts.limit;
     }
     return { entries, missed };
+  }
+
+  // ---------------------------------------------------------------- high availability (CARP)
+
+  /** CARP state of this node: its virtual IPs, demotion, allow flag and maintenance mode. */
+  async readHaState(): Promise<HaState> {
+    const raw = (await this.http.get(EP.vipStatus)) as { rows?: unknown; carp?: Record<string, unknown> } | null;
+    if (!raw || !Array.isArray(raw.rows) || !raw.carp || typeof raw.carp !== "object") {
+      throw new OpnsenseError("protocol", `Unexpected response shape from ${EP.vipStatus}: expected rows and a carp section.`, { endpoint: EP.vipStatus });
+    }
+    const str = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : "");
+    const vips = raw.rows
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+      .map((r) => ({ interface: str(r.interface), vhid: str(r.vhid), subnet: str(r.subnet), status: str(r.status), mode: str(r.mode) }));
+    const demotion = Number(str(raw.carp.demotion));
+    return {
+      vips,
+      demotion: Number.isFinite(demotion) ? demotion : 0,
+      allow: str(raw.carp.allow) !== "0",
+      maintenance: raw.carp.maintenancemode === true || raw.carp.maintenancemode === 1 || raw.carp.maintenancemode === "1",
+    };
+  }
+
+  /**
+   * Toggle CARP maintenance mode. This is a TOGGLE on the firewall, so never call it
+   * twice for one switch: read the state first and again afterwards. Returns what the
+   * firewall says it did (`enter_maintenance` / `leave_maintenance`).
+   */
+  async toggleCarpMaintenance(): Promise<"enter_maintenance" | "leave_maintenance"> {
+    const raw = (await this.http.post(EP.carpStatus, { params: ["maintenance"] })) as { status?: unknown; action?: unknown } | null;
+    if (raw?.status !== "ok" || (raw.action !== "enter_maintenance" && raw.action !== "leave_maintenance")) {
+      throw new OpnsenseError("rejected", `The firewall did not confirm the CARP change (answer: ${JSON.stringify(raw)?.slice(0, 120)}).`, { endpoint: EP.carpStatus });
+    }
+    return raw.action;
+  }
+
+  /** True when this node can reach its HA peer over the sync link (it asks the peer for its version). */
+  async peerReachable(): Promise<boolean> {
+    try {
+      const raw = (await this.http.get(EP.haVersion)) as { response?: { firmware?: { version?: unknown } } } | null;
+      return typeof raw?.response?.firmware?.version === "string" && raw.response.firmware.version !== "";
+    } catch {
+      return false;
+    }
   }
 }

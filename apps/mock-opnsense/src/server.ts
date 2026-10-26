@@ -416,6 +416,31 @@ export function buildMockServer(opts: MockServerOptions = {}): MockServer {
     return { result: "saved" };
   });
 
+  // ---------------------------------------------------------------- CARP (diagnostics/interface)
+  const vipStatus = async () => {
+    const rows = state.vipRows();
+    const c = state.carp;
+    return {
+      total: rows.length,
+      rowCount: rows.length,
+      current: 1,
+      rows,
+      carp: { demotion: String(c.demotion), allow: c.allow ? "1" : "0", maintenancemode: c.maintenance, status_msg: "" },
+    };
+  };
+  app.get("/api/diagnostics/interface/get_vip_status", vipStatus);
+  app.post("/api/diagnostics/interface/get_vip_status", vipStatus);
+  app.get("/api/diagnostics/interface/get_pfsync_nodes", async () => ({ total: 1, rowCount: 1, current: 1, rows: [{ creatorid: "433d1308", this: 1 }] }));
+  // Like the real controller: POST only (a GET answers {"message":"error"}).
+  app.all("/api/diagnostics/interface/carp_status/:status", async (req) => {
+    if (req.method !== "POST") return { message: "error" };
+    return state.setCarp((req.params as { status: string }).status);
+  });
+  app.post("/__mock/carp", async (req) => {
+    Object.assign(state.carp, (req.body ?? {}) as object);
+    return { status: "ok", carp: state.carp };
+  });
+
   // ---------------------------------------------------------------- HA (core/hasync, core/hasync_status)
   app.get("/api/core/hasync/get", async () => ({
     hasync: {

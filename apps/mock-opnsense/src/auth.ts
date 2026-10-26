@@ -29,7 +29,7 @@ export const DEFAULT_USERS: Record<string, MockUser> = {
   // Can do everything except read the firewall log ("!" entries are denied).
   nolog: { password: "nolog-pass", privileges: ["*", "!diagnostics/firewall/log"] },
   // Can read rules and aliases but not write anything.
-  viewer: { password: "viewer-pass", privileges: ["firewall/filter/search_rule", "firewall/filter/get_", "firewall/filter/list_", "firewall/alias/search_item", "firewall/alias/get_item", "core/firmware/info", "diagnostics/firewall/log"] },
+  viewer: { password: "viewer-pass", privileges: ["firewall/filter/search_rule", "firewall/filter/get_", "firewall/filter/list_", "firewall/alias/search_item", "firewall/alias/get_item", "core/firmware/info", "diagnostics/firewall/log", "diagnostics/interface/get_vip_status"] },
 };
 
 interface Session {

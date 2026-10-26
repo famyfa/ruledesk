@@ -1,4 +1,4 @@
-import type { FieldChange, FirewallInfo, FirewallLogEntry, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
+import type { FieldChange, FirewallInfo, HaCheck, HaRole, HaState, SwitchChecks, FirewallLogEntry, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
 
 export interface ApiErrorBody {
   kind: string;
@@ -133,6 +133,8 @@ export const api = {
     if (opts.digest) q.set("digest", opts.digest);
     return request<{ entries: FirewallLogEntry[]; missed: boolean }>("GET", `${site(id)}/log?${q}`);
   },
+  ha: (id: string) => request<HaView>("GET", `${site(id)}/ha`),
+  haSwitch: (id: string, enter: boolean) => request<{ result: HaSwitchResult }>("POST", `${site(id)}/ha/switch`, { enter }),
   apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
     request<{ result: ApplyResult }>("POST", `${site(id)}/apply`, {
       baseline: wc.baseline,
@@ -147,4 +149,21 @@ export function parseApiKeyFile(text: string): { apiKey: string; apiSecret: stri
   const key = /^\s*key\s*=\s*(\S+)\s*$/m.exec(text)?.[1];
   const secret = /^\s*secret\s*=\s*(\S+)\s*$/m.exec(text)?.[1];
   return key && secret ? { apiKey: key, apiSecret: secret } : null;
+}
+
+export interface HaView {
+  state: HaState;
+  role: HaRole;
+  peerReachable: boolean;
+  enter: SwitchChecks;
+  leave: SwitchChecks;
+}
+
+export interface HaSwitchResult {
+  outcome: "done" | "already" | "refused" | "unverified" | "failed";
+  enter: boolean;
+  checks: HaCheck[];
+  steps: { label: string; status: "done" | "failed" | "skipped"; error?: string }[];
+  after: HaState | null;
+  message: string;
 }

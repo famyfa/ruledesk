@@ -378,3 +378,43 @@ describe("firewall log route", () => {
     expect(res.json().error).toMatchObject({ kind: "site_signed_out", siteId: "ber" });
   });
 });
+
+describe("HA routes", () => {
+  const peer = buildMockServer();
+
+  it("shows the CARP state with the switch checks", async () => {
+    ber.linkSecondary(peer);
+    const { cookie } = await login({ ber: pw("admin", "ruledeck-dev") }, "10.6.6.1");
+    const res = await app.inject({ method: "GET", url: "/api/sites/ber/ha", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ role: "master", peerReachable: true, enter: { allowed: true }, state: { maintenance: false } });
+  });
+
+  it("switches over and back, needs CSRF, and refuses without a reachable peer", async () => {
+    const { cookie, csrf } = await login({ ber: pw("admin", "ruledeck-dev") }, "10.6.6.2");
+    const post = (enter: unknown, withCsrf = true) =>
+      app.inject({ method: "POST", url: "/api/sites/ber/ha/switch", headers: { cookie, ...(withCsrf ? { [CSRF_HEADER]: csrf } : {}) }, payload: { enter } });
+    expect((await post(true, false)).statusCode).toBe(403);
+    expect((await post("yes")).statusCode).toBe(400);
+
+    ber.linkSecondary(null);
+    expect((await post(true)).json().result.outcome).toBe("refused");
+
+    ber.linkSecondary(peer);
+    expect((await post(true)).json().result).toMatchObject({ outcome: "done", after: { maintenance: true } });
+    expect((await post(false)).json().result).toMatchObject({ outcome: "done", after: { maintenance: false } });
+  });
+
+  it("is off when writes are disabled, but the state can still be read", async () => {
+    const topology = parseTopology(JSON.stringify({ version: 1, sites: [{ id: "ber", name: "Berlin", primary: { url: urlOf(ber) } }] }));
+    const ro = await buildApp({ config: { production: false, host: "127.0.0.1", port: 0, cookieSecure: false, allowWrites: false, applyRateLimit: 100, siteLoginFailures: 100, topology }, logger: false });
+    const res = await ro.inject({ method: "POST", url: "/api/auth/login", payload: { sites: { ber: pw("admin", "ruledeck-dev") } }, remoteAddress: "10.6.6.3" });
+    const cookie = `${SESSION_COOKIE}=${res.cookies.find((c) => c.name === SESSION_COOKIE)!.value}`;
+    const csrf = res.json().csrfToken as string;
+    const sw = await ro.inject({ method: "POST", url: "/api/sites/ber/ha/switch", headers: { cookie, [CSRF_HEADER]: csrf }, payload: { enter: true } });
+    expect(sw.statusCode).toBe(403);
+    expect(sw.json().error.kind).toBe("writes_disabled");
+    expect((await ro.inject({ method: "GET", url: "/api/sites/ber/ha", headers: { cookie } })).statusCode).toBe(200);
+    await ro.close();
+  });
+});

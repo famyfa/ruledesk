@@ -1853,3 +1853,26 @@ td.cell-name:hover .cell-content {
 .rule-grid td.cell.cell-name .cell-content {
   cursor: pointer;
 }
+
+/* ---------------------------------------------------------------- HA switch */
+.ha-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.modal.ha-dialog {
+  width: min(620px, 96vw);
+}
+.check-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.check-list li.ok {
+  color: #1f7a3d;
+}
+.check-list li.bad {
+  color: var(--error, #c0392b);
+  font-weight: 600;
+}

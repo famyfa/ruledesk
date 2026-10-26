@@ -1,3 +1,4 @@
+import { runSwitch, type SwitchResult } from "./ha.ts";
 import type { FirewallSnapshot, WorkingCopy } from "@ruledeck/core";
 import {
   featuresFor,
@@ -91,6 +92,17 @@ export async function applyToSite(s: SiteSession, wc: WorkingCopy, opts: { ackno
   applying.add(s.siteId);
   try {
     return await track(s, () => runApply(s.client, wc, opts));
+  } finally {
+    applying.delete(s.siteId);
+  }
+}
+
+/** HA switch under the same per-site lock as apply (no apply while VIPs move, and vice versa). */
+export async function haSwitchSite(s: SiteSession, enter: boolean): Promise<SwitchResult> {
+  if (applying.has(s.siteId)) throw new OpnsenseError("rejected", "Another change is already running for this site.");
+  applying.add(s.siteId);
+  try {
+    return await track(s, () => runSwitch(s.client, enter));
   } finally {
     applying.delete(s.siteId);
   }

@@ -131,6 +131,19 @@ export class MockState {
   /** Firewall log, newest first. Each row has the fields of the real filterlog parser. */
   logRows: RawRecord[] = [];
   private logCounter = 0;
+  /** CARP as `interface show carp` reports it (see carp_set_status.php). */
+  carp = {
+    maintenance: false,
+    allow: true,
+    demotion: 0,
+    /** Leaving maintenance: VIPs become MASTER again only after this time (ms epoch). */
+    masterAt: 0,
+    /** Test control: after leaving maintenance the node never becomes master. */
+    stuckBackup: false,
+    /** Test control: seconds the peer needs after entering maintenance (VIPs stay MASTER until then). */
+    takeoverDelayMs: 0,
+    takeoverAt: 0,
+  };
   dmzKey: string;
   private salt?: string;
   legacyRules: RawRecord[] = [];
@@ -202,6 +215,48 @@ export class MockState {
         new Date(now - (30 - i) * 15_000),
       );
     }
+  }
+
+  carpStatus(now = Date.now()): string {
+    const c = this.carp;
+    if (!c.allow) return "DISABLED";
+    if (c.maintenance) return now < c.takeoverAt ? "MASTER" : "BACKUP";
+    if (c.stuckBackup || now < c.masterAt) return "BACKUP";
+    return "MASTER";
+  }
+
+  vipRows(): RawRecord[] {
+    const status = this.carpStatus();
+    return [
+      { interface: "WAN", vhid: "1", advbase: "1", advskew: "0", subnet: "10.0.0.10", status, mode: "carp", status_txt: status, vhid_txt: "1 (freq. 1/0)" },
+      { interface: "LAN", vhid: "2", advbase: "1", advskew: "0", subnet: "192.168.1.1", status, mode: "carp", status_txt: status, vhid_txt: "2 (freq. 1/0)" },
+    ];
+  }
+
+  /** carp_set_status.php; returns the JSON it prints. */
+  setCarp(action: string, now = Date.now()): RawRecord {
+    const c = this.carp;
+    if (action === "maintenance") {
+      if (c.maintenance) {
+        c.maintenance = false;
+        c.demotion = 0;
+        c.masterAt = now + c.takeoverDelayMs;
+        return { status: "ok", action: "leave_maintenance" };
+      }
+      c.maintenance = true;
+      c.demotion = 240;
+      c.takeoverAt = now + c.takeoverDelayMs;
+      return { status: "ok", action: "enter_maintenance" };
+    }
+    if (action === "disable") {
+      c.allow = false;
+      return { status: "ok", action: "disable" };
+    }
+    if (action === "enable") {
+      c.allow = true;
+      return { status: "ok", action: "enable" };
+    }
+    return { status: "failed" };
   }
 
   private id(u: string) {

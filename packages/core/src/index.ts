@@ -11,3 +11,4 @@ export * from "./shared.ts";
 export * from "./filter.ts";
 export * from "./filter-records.ts";
 export * from "./sync.ts";
+export * from "./ha.ts";

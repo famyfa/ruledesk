@@ -98,3 +98,5 @@ export const SharedRequestSchema = z.object({
   haSync: z.record(Str(32), z.boolean()).default({}),
   confirm: z.boolean().optional(),
 });
+
+export const HaSwitchSchema = z.object({ enter: z.boolean() }).strict();

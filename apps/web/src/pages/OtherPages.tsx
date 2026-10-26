@@ -1,3 +1,4 @@
+import { HaCell } from "../components/HaSwitch.tsx";
 import { api, ApiError } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
 
@@ -76,7 +77,7 @@ export function SitesPage() {
               <td>{s.signedIn ? s.user : <span className="muted">not signed in</span>}</td>
               <td>{s.info?.productVersion ?? "—"}</td>
               <td>{s.info ? (s.info.features.rulesWrite ? "Supported" : <span title={s.info.features.notes.join(" ")}>Read-only</span>) : "—"}</td>
-              <td>{s.hasSecondary ? "HA pair" : "single"}</td>
+              <td>{s.hasSecondary ? s.signedIn ? <HaCell siteId={s.id} siteName={s.name} /> : "HA pair" : "single"}</td>
               <td className="row-actions">
                 {s.signedIn ? (
                   <>

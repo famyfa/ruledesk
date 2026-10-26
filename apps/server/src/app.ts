@@ -7,9 +7,10 @@ import { z } from "zod";
 import { OpnsenseError } from "@ruledeck/opnsense-client";
 import type { AppConfig } from "./config.ts";
 import { RateLimiter, safeEqual, SessionStore, track, type Session, type SiteSession } from "./auth.ts";
-import { applyToSite, endSiteSession, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
+import { applyToSite, endSiteSession, haSwitchSite, signInError, signInSite, snapshotOf, type SignInError } from "./sites.ts";
+import { readHa } from "./ha.ts";
 import { publicTopology, type SiteConfig } from "./topology.ts";
-import { ApplyRequestSchema, SharedRequestSchema } from "./schemas.ts";
+import { ApplyRequestSchema, HaSwitchSchema, SharedRequestSchema } from "./schemas.ts";
 import { sharedApply, sharedPreflight } from "./shared-apply.ts";
 
 export const SESSION_COOKIE = "ruledeck_session";
@@ -314,6 +315,35 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const result = await withSite(s, reply, () => track(s, () => s.client.readFirewallLog({ limit: q.data.limit, sinceDigest: q.data.digest })));
     if (!result) return;
     return result;
+  });
+
+  /** HA state of the site's primary node (CARP VIPs, maintenance mode, peer reachable) with the switch checks. */
+  app.get("/api/sites/:id/ha", async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    const view = await withSite(s, reply, () => track(s, () => readHa(s.client)));
+    if (!view) return;
+    return view;
+  });
+
+  /** Graceful switchover: enter or leave CARP maintenance mode on the primary node. Sent at most once. */
+  app.post("/api/sites/:id/ha/switch", async (req, reply) => {
+    const s = siteFor(req, reply);
+    if (!s) return;
+    if (!applyLimiter.take(req.session!.id)) {
+      return reply.code(429).send({ error: { kind: "rate_limited", message: "Too many changes. Wait a minute." } });
+    }
+    if (!config.allowWrites) {
+      return reply.code(403).send({
+        error: { kind: "writes_disabled", message: "Changing firewalls is disabled on this server (RULEDECK_ALLOW_WRITES is not true)." },
+      });
+    }
+    const body = HaSwitchSchema.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: { kind: "bad_request", message: "Say whether to enter or leave maintenance mode." } });
+    const result = await withSite(s, reply, () => haSwitchSite(s, body.data.enter));
+    if (!result) return;
+    req.log.info({ event: "ha_switch", site: s.siteId, user: s.user, enter: result.enter, outcome: result.outcome }, "ha switch finished");
+    return { result };
   });
 
   app.post("/api/sites/:id/apply", { bodyLimit: 16 * 1024 * 1024 }, async (req, reply) => {
