@@ -10,3 +10,7 @@ playwright-report
 **/.env
 **/.env.development
 .claude
+ruledeck.topology.json
+certs
+*.log
+coverage
