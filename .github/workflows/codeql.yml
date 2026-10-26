@@ -7,6 +7,7 @@ on:
     branches: [main, dev]
   schedule:
     - cron: "17 4 * * 1"
+  workflow_dispatch: # run it by hand from the Actions tab
 
 permissions:
   actions: read # needed by the CodeQL action on private repositories
