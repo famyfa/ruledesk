@@ -74,6 +74,24 @@ Every MVC save creates a new config history entry. That is RuleDeck's recovery m
 
 RuleDeck only reads this log from the HA primary, never stores it, and keeps just a whitelist of fields.
 
+## High availability / CARP (switchover)
+
+Read from opnsense/core master source (`Diagnostics/Api/InterfaceController.php`, `scripts/interfaces/carp_set_status.php`, `carp_global_status.php`, `actions_interface.conf`). URL paths follow the usual camelCase -> snake_case convention and are **not yet confirmed live** (Live column).
+
+| Operation | Endpoint | Method | 26.7 | Live | Notes |
+|---|---|---|---|---|---|
+| VIP / CARP status | `diagnostics/interface/get_vip_status` | GET/POST | source | ☐ | Rows: `interface`, `vhid`, `advbase`, `advskew`, `subnet`, `status` (`MASTER`/`BACKUP`/`INIT`/`DISABLED`), `mode`, `status_txt`. Response also has a `carp` key from `interface show carp`: `demotion`, `allow`, `maintenancemode` (bool), `status_msg`. Optional POST field `mode` filters rows |
+| Set CARP state | `diagnostics/interface/carp_status/{status}` | POST | source | ☐ | `status`: `enable`, `disable`, `maintenance`. Anything else returns `{"status":"failed"}` |
+| Pfsync nodes | `diagnostics/interface/get_pfsync_nodes` | GET | source | ☐ | |
+
+Behavior of `carp_set_status` (important for a safe switchover):
+
+- **`maintenance` is a toggle.** Not in maintenance: sets config flag `virtualip_carp_maintenancemode`, sets sysctl `net.inet.carp.demotion` to 240, writes config ("Enter CARP maintenance mode"), returns `{"status":"ok","action":"enter_maintenance"}`. In maintenance: removes the flag, restores the demotion default, writes config, returns `action: leave_maintenance`. RuleDeck must read `maintenancemode` first, act, then read back; never repeat the call blindly.
+- `disable`: `net.inet.carp.allow=0` and brings the CARP VIPs down. Not persistent (config not written), does not touch the maintenance flag.
+- `enable`: `net.inet.carp.allow=1` and reconfigures the VIPs. Does not clear the maintenance flag.
+- Maintenance mode is persistent (survives reboot, it is in config.xml and replicates to the peer if config sync is on: check before use).
+- Not verified: the GUI labels and how the GUI page calls these actions.
+
 ## Feature flags by version
 
 | Flag | 25.7 | 26.1 | 26.7 |
