@@ -8,6 +8,11 @@ Edit rules in a dense table and a tabbed form, create aliases while you write th
 >
 > RuleDeck started as a best-effort fix for one admin's daily pain. Use it, fork it, improve it. See [License](#license).
 
+> [!WARNING]
+> **This project is vibe-coded.** It was built largely with an AI coding assistant, directed and tested by one admin. It comes with tests and one security review ([docs/security.md](docs/security.md)), but it has **not** been audited independently.
+>
+> RuleDeck can change firewalls. **Don't run it in a production environment without your own security review**, and keep it on a management network, never exposed to the internet.
+
 ## What it does
 
 **Firewall rules and aliases**
