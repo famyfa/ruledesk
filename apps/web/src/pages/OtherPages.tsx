@@ -173,6 +173,10 @@ export function SettingsPage() {
           github.com/famyfa/ruledesk
         </a>
       </p>
+      <p className="muted small">
+        RuleDeck is an independent project, not affiliated with or endorsed by Deciso B.V. or the OPNsense project. OPNsense® is a registered trademark of Deciso B.V.
+        Problems with RuleDeck belong in its own issue tracker.
+      </p>
       <h2>Firewall capabilities</h2>
       {f ? (
         <dl className="kv">

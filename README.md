@@ -85,3 +85,11 @@ Every OPNsense endpoint RuleDeck uses is verified against the OPNsense source fo
 [MIT](LICENSE). Use it, change it, share it, sell it, as long as the copyright notice stays in. It comes **without any warranty**: RuleDeck changes firewalls, so test it on something disposable first and keep OPNsense's config history at hand.
 
 Contributions, issues and forks are welcome.
+
+## Trademarks and affiliation
+
+RuleDeck is an independent, community project. It is **not affiliated with, endorsed by, or supported by Deciso B.V. or the OPNsense project**. OPNsense® is a registered trademark of Deciso B.V.; RuleDeck only talks to OPNsense through its public API and uses the name to say what it works with.
+
+Palo Alto Networks® and Panorama™ are trademarks of Palo Alto Networks, Inc. RuleDeck is not affiliated with Palo Alto Networks; "Panorama-style" only describes the kind of user interface.
+
+For problems with RuleDeck, please open an issue here, not with the OPNsense project or Deciso.
