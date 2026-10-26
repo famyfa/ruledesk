@@ -5,6 +5,8 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     groups:
       dev-dependencies:
         dependency-type: development
@@ -15,8 +17,12 @@ updates:
     target-branch: dev
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14
   - package-ecosystem: docker
     directory: /
     target-branch: dev
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14
