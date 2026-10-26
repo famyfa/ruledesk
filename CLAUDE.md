@@ -6,7 +6,7 @@ RuleDeck: spreadsheet-first OPNsense rule editor. The product spec is [Instructi
 
 - `npm run dev`: 2 mock firewalls (8443 Berlin, 8444 Munich) + server (3000) + web (5173). Sign in as `admin / ruledeck-dev` (a mock OPNsense account)
 - `npm test`: Vitest (unit + integration against an in-process mock)
-- `npx playwright test`: E2E on its own stack with the two MOCK firewalls (pinned, never your real config)
+- `npx playwright test`: E2E on its own stack with the two MOCK firewalls (pinned, never your real config) on its own ports (web 5273, server 3100, mocks 9443/9444), so a running dev/lab stack is never touched
 - `npm run typecheck`: all workspaces
 
 ## Structure

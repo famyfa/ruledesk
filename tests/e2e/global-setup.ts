@@ -1,6 +1,6 @@
 /** Wait until the mock firewalls, the server and the web app all answer. */
 export default async function globalSetup() {
-  const urls = ["http://127.0.0.1:8443/", "http://127.0.0.1:8444/", "http://127.0.0.1:3000/api/health", "http://127.0.0.1:5173/"];
+  const urls = ["http://127.0.0.1:9443/", "http://127.0.0.1:9444/", "http://127.0.0.1:3100/api/health", "http://127.0.0.1:5273/"];
   const deadline = Date.now() + 90_000;
   for (const url of urls) {
     for (;;) {

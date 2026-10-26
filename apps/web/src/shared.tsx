@@ -45,6 +45,8 @@ export interface SharedValue {
   ensureLoaded: () => void;
   reload: (opts?: { discardLocal?: boolean }) => Promise<void>;
   preflight: (ack: Record<string, boolean>, haSync: Record<string, boolean>) => Promise<SitePlan[]>;
+  /** After writing to the sites: reload the open site's view (or just flag the changes if it has staged edits). */
+  refreshOpenSite: () => void;
   apply: (ack: Record<string, boolean>, haSync: Record<string, boolean>) => Promise<SharedApplyResult>;
 }
 
@@ -183,6 +185,10 @@ export function SharedProvider({ children }: { children: ReactNode }) {
     ensureLoaded: () => setWanted(true),
     reload: (opts) => load(!!opts?.discardLocal),
     preflight: async (ack, haSync) => (await api.sharedPreflight(body(ack, haSync))).plans,
+    refreshOpenSite: () => {
+      if ((base.changeSet?.changes.length ?? 0) === 0) void base.reload();
+      else void base.checkForExternalChanges();
+    },
     apply: async (ack, haSync) => (await api.sharedApply(body(ack, haSync))).result,
   };
   return <SharedCtx.Provider value={value}>{children}</SharedCtx.Provider>;

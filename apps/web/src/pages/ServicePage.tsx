@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   addGridItem,
@@ -33,6 +33,7 @@ function useServiceWc(def: ServiceDef) {
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<ServiceSnapshot["options"]>({});
   const [restored, setRestored] = useState(false);
+  const loadSeq = useRef(0);
 
   const persist = useCallback(
     (next: ServiceWc | null) => {
@@ -56,10 +57,12 @@ function useServiceWc(def: ServiceDef) {
   const load = useCallback(
     async (discard = false) => {
       if (!siteId) return;
+      const mine = ++loadSeq.current;
       setLoading(true);
       setError(null);
       try {
         const { snapshot } = await api.service(siteId, def.id);
+        if (mine !== loadSeq.current) return; // a newer load (other site/service) is under way
         setOptions(snapshot.options);
         const draft = discard ? null : loadDraft(draftKey(siteId, def.id));
         if (discard) sessionStorage.removeItem(draftKey(siteId, def.id));
@@ -67,11 +70,12 @@ function useServiceWc(def: ServiceDef) {
         // A restored draft keeps the baseline it was made on, so changes made elsewhere are caught when applying.
         setWcState(draft ? { ...draft, baseline: { ...draft.baseline, options: snapshot.options, defaults: snapshot.defaults } } : createServiceWc(snapshot));
       } catch (err) {
+        if (mine !== loadSeq.current) return;
         setWcState(null);
         if (err instanceof ApiError && err.body.kind === "site_signed_out" && err.body.siteId) promptSignIn(err.body.siteId);
         setError(err instanceof ApiError ? err.message : "Couldn't read this service.");
       } finally {
-        setLoading(false);
+        if (mine === loadSeq.current) setLoading(false);
       }
     },
     [siteId, def.id, promptSignIn],

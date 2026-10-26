@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { MOCK, resetMock, turnLogOn } from "./helpers.ts";
+import { login, MOCK, resetMock, turnLogOn } from "./helpers.ts";
 
 test.describe("signing in with OPNsense accounts", () => {
   test.beforeEach(async () => {
@@ -84,4 +84,13 @@ test.describe("signing in with OPNsense accounts", () => {
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("button", { name: /1 pending/ })).toBeVisible();
   });
+
+  test("when the RuleDeck session ends, the sign-in page says why", async ({ page, context }) => {
+    await login(page);
+    await context.clearCookies(); // like an idle timeout or a server restart
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Your RuleDeck session ended" })).toBeVisible();
+    await expect(page.getByLabel("Username")).toBeVisible();
+  });
 });
+

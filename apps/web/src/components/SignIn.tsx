@@ -67,7 +67,7 @@ export function CredentialFields({ value, onChange, idPrefix }: { value: Creds; 
 }
 
 /** Full sign-in page: one card per site. */
-export function SignInPage({ onSignedIn }: { onSignedIn: (s: SessionView, errors: Record<string, ApiErrorBody>) => void }) {
+export function SignInPage({ onSignedIn, notice = null }: { onSignedIn: (s: SessionView, errors: Record<string, ApiErrorBody>) => void; notice?: string | null }) {
   const id = useId();
   const [topology, setTopology] = useState<PublicTopology | null>(null);
   const [same, setSame] = useState(true);
@@ -78,7 +78,25 @@ export function SignInPage({ onSignedIn }: { onSignedIn: (s: SessionView, errors
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.topology().then(setTopology).catch(() => setError("Can't reach the RuleDeck server."));
+    // Retry while the server can't be reached (e.g. it is restarting).
+    let stopped = false;
+    const load = () =>
+      api
+        .topology()
+        .then((t) => {
+          if (stopped) return;
+          setError(null);
+          setTopology(t);
+        })
+        .catch(() => {
+          if (stopped) return;
+          setError("Can't reach the RuleDeck server. Retrying…");
+          setTimeout(load, 2000);
+        });
+    void load();
+    return () => {
+      stopped = true;
+    };
   }, []);
 
   const credsFor = (siteId: string) => (same ? shared : (perSite[siteId] ?? EMPTY));
@@ -115,6 +133,11 @@ export function SignInPage({ onSignedIn }: { onSignedIn: (s: SessionView, errors
           </span>{" "}
           RuleDeck
         </h1>
+        {notice && (
+          <div className="banner banner-info" role="status">
+            {notice}
+          </div>
+        )}
         <p className="muted">Sign in with your OPNsense account. Your firewall decides who you are and what you may change (local users, LDAP, RADIUS, TOTP).</p>
 
         {multi && (

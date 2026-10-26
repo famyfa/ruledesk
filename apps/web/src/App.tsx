@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, setUnauthenticatedHandler, type ApiErrorBody, type SessionView } from "./api.ts";
+import { api, ApiError, setUnauthenticatedHandler, type ApiErrorBody, type SessionView } from "./api.ts";
 import { clearDrafts, WorkspaceProvider } from "./workspace.tsx";
 import { Shell, type Page } from "./components/Shell.tsx";
 import { serviceById } from "@ruledeck/core";
@@ -38,6 +38,7 @@ function useTheme() {
 
 export function App() {
   const [session, setSession] = useState<SessionView | null | undefined>(undefined);
+  const [signInNotice, setSignInNotice] = useState<string | null>(null);
   const [signInErrors, setSignInErrors] = useState<Record<string, ApiErrorBody>>({});
   const [page, setPageState] = useState<Page>(pageFromHash);
   const [focusRule, setFocusRule] = useState<string | null>(null);
@@ -46,14 +47,28 @@ export function App() {
   useEffect(() => {
     // RuleDeck session ended (idle, restart): show sign-in again. Staged drafts stay
     // in this tab's sessionStorage and come back after signing in.
-    setUnauthenticatedHandler(() => setSession(null));
-    api
-      .session()
-      .then(setSession)
-      .catch(() => setSession(null));
+    setUnauthenticatedHandler(() => {
+      setSignInNotice("Your RuleDeck session ended (idle for 30 minutes, signed out elsewhere, or the server restarted). Sign in again: your staged changes in this tab are kept.");
+      setSession(null);
+    });
+    // While the server is unreachable (e.g. restarting), keep trying instead of showing a dead end.
+    let stopped = false;
+    const check = () =>
+      api
+        .session()
+        .then((s) => !stopped && setSession(s))
+        .catch((err) => {
+          if (stopped) return;
+          if (err instanceof ApiError) setSession(null);
+          else setTimeout(check, 2000);
+        });
+    void check();
     const onHash = () => setPageState(pageFromHash());
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    return () => {
+      stopped = true;
+      window.removeEventListener("hashchange", onHash);
+    };
   }, []);
 
   const setPage = useCallback((p: Page) => {
@@ -69,11 +84,13 @@ export function App() {
     [setPage],
   );
 
-  if (session === undefined) return <p className="muted pad">Loading…</p>;
+  if (session === undefined) return <p className="muted pad">Connecting to RuleDeck…</p>;
   if (session === null) {
     return (
       <SignInPage
+        notice={signInNotice}
         onSignedIn={(s, errors) => {
+          setSignInNotice(null);
           setSignInErrors(errors);
           setSession(s);
         }}

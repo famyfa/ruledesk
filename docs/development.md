@@ -41,3 +41,15 @@ The mock exposes `/__mock/*` endpoints to reset state, inject faults and simulat
 - Modified rules are written with only their changed fields. Don't "round-trip" whole records.
 - Every working-copy operation is a pure function with a unit test.
 - No secret ever goes into a response or a log line (`apps/server/src/app.test.ts` checks this). RuleDeck stores nothing on the server.
+
+## Ports
+
+| Stack | Web | Server | Mock firewalls |
+|---|---|---|---|
+| `npm run dev` (development, or a lab via `apps/server/.env`) | 5173 | 3000 | 8443, 8444 |
+| `npx playwright test` (E2E, started and stopped by Playwright) | 5273 | 3100 | 9443, 9444 |
+
+The E2E stack has its own ports and topology (`apps/server/topology.e2e.json`), so tests can run while a dev or lab stack keeps running.
+
+`npm run dev` restarts the server whenever server code changes (in-memory sessions are lost) and reloads the page whenever web code changes, and React's development mode runs every effect twice. For hands-on testing that shouldn't be interrupted, run the production image instead (see docs/install.md), e.g. on port 8080.
+

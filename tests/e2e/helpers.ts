@@ -1,7 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 
-export const MOCK = "http://127.0.0.1:8443";
-export const MOCK_MUC = "http://127.0.0.1:8444";
+/** The E2E stack's mock firewalls (own ports, see playwright.config.ts). */
+export const MOCK = "http://127.0.0.1:9443";
+export const MOCK_MUC = "http://127.0.0.1:9444";
 
 export async function resetMock(version?: string) {
   for (const base of [MOCK, MOCK_MUC]) {

@@ -85,7 +85,9 @@ export function SharedApplyPage() {
     setBusy(true);
     setError(null);
     try {
-      setResult(await sh.apply(ack, ha));
+      const r = await sh.apply(ack, ha);
+      setResult(r);
+      if (r.sites.some((s) => (s.result?.state.written ?? 0) > 0)) sh.refreshOpenSite();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "The request failed.");
     } finally {

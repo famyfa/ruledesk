@@ -72,6 +72,10 @@ test.describe("Shared policy: create once, apply to all sites", () => {
     await expect(page.getByRole("button", { name: /^0 pending/ })).toBeVisible();
     await tree(page).getByRole("button", { name: "Drift" }).click();
     await expect(page.getByText("No drift")).toBeVisible();
+
+    // the open site's own rule list is fresh too, without reloading the page
+    await nav(page).getByRole("button", { name: "Policies" }).click();
+    await expect(page.getByRole("row").filter({ hasText: "Shared: allow DNS from DMZ" })).toHaveCount(1);
   });
 
   test("a shared alias is created once and exists on every site", async ({ page }) => {
