@@ -2,7 +2,7 @@ import { connect } from "node:tls";
 
 /**
  * Print a firewall's TLS certificate fingerprint for "tlsFingerprint" in the topology.
- *   npm run fingerprint -- 10.54.0.101 [port]
+ *   npm run fingerprint -- 192.0.2.10 [port]
  * Compare it with the certificate shown in OPNsense (System > Trust > Certificates)
  * before trusting it: the first connection could itself be intercepted.
  */
