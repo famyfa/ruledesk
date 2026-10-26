@@ -48,7 +48,7 @@ describe("catalogue", () => {
     expect(new Set(SERVICES.map((s) => s.id)).size).toBe(SERVICES.length);
     for (const s of SERVICES) {
       for (const g of s.grids) {
-        for (const p of [g.search, g.get, g.add, g.set, g.del]) expect(p).toMatch(/^[a-z0-9_]+(\/[a-z0-9_]+){2}$/);
+        for (const p of [g.search, g.get, g.add, g.set, g.del]) expect(p).toMatch(/^[a-z0-9_]+(\/[a-z0-9_]+){1,2}$/);
         expect(g.nameFields.length).toBeGreaterThan(0);
       }
     }

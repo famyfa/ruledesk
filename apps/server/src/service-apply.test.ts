@@ -48,6 +48,21 @@ describe("reading a service", () => {
   });
 });
 
+describe("read-only services never leak secrets", () => {
+  it("users, WireGuard and NAT are read without passwords, keys or seeds", async () => {
+    for (const id of ["access", "wireguard", "nat"]) {
+      const snap = await client.readServiceSnapshot(serviceById(id)!, "site");
+      const text = JSON.stringify(snap);
+      for (const secret of ["mock-hash-do-not-leak", "MOCKOTPSEED", "mock-wg-private-do-not-leak", "mock-psk-do-not-leak"]) expect(text).not.toContain(secret);
+    }
+    const users = await client.readServiceSnapshot(serviceById("access")!, "site");
+    expect(users.grids.users![0]!.item.name).toBe("admin");
+    expect(users.secrets).toEqual(expect.arrayContaining(["password", "otp_seed"]));
+    const wg = await client.readServiceSnapshot(serviceById("wireguard")!, "site");
+    expect(wg.secrets).toEqual(expect.arrayContaining(["privkey", "psk"]));
+  });
+});
+
 describe("certificates", () => {
   it("keeps only whitelisted fields (no private key, no PEM)", async () => {
     const certs = await client.listCertificates();

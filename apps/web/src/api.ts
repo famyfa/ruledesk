@@ -1,4 +1,4 @@
-import type { FieldChange, FirewallInfo, HaCheck, HaRole, HaState, SwitchChecks, FirewallLogEntry, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
+import type { CertificateInfo, ServiceChange, ServiceSnapshot, ServiceWc, FieldChange, FirewallInfo, HaCheck, HaRole, HaState, SwitchChecks, FirewallLogEntry, FirewallSnapshot, RiskWarning, ValidationReport, WorkingCopy } from "@ruledeck/core";
 
 export interface ApiErrorBody {
   kind: string;
@@ -133,6 +133,13 @@ export const api = {
     if (opts.digest) q.set("digest", opts.digest);
     return request<{ entries: FirewallLogEntry[]; missed: boolean }>("GET", `${site(id)}/log?${q}`);
   },
+  service: (id: string, svc: string) => request<{ snapshot: ServiceSnapshot; readOnly: boolean }>("GET", `${site(id)}/services/${encodeURIComponent(svc)}`),
+  serviceApply: (id: string, svc: string, wc: ServiceWc) =>
+    request<{ result: ServiceApplyResult }>("POST", `${site(id)}/services/${encodeURIComponent(svc)}/apply`, {
+      baseline: { ...wc.baseline, options: {}, defaults: {} },
+      current: { settings: wc.settings, grids: wc.grids },
+    }),
+  certificates: (id: string) => request<{ certificates: CertificateInfo[] }>("GET", `${site(id)}/certificates`),
   ha: (id: string) => request<HaView>("GET", `${site(id)}/ha`),
   haSwitch: (id: string, enter: boolean) => request<{ result: HaSwitchResult }>("POST", `${site(id)}/ha/switch`, { enter }),
   apply: (id: string, wc: WorkingCopy, acknowledgeRisks: boolean) =>
@@ -166,4 +173,15 @@ export interface HaSwitchResult {
   steps: { label: string; status: "done" | "failed" | "skipped"; error?: string }[];
   after: HaState | null;
   message: string;
+}
+
+export interface ServiceApplyResult {
+  outcome: "success" | "conflict" | "failed" | "partial" | "unverified" | "nothing";
+  steps: { label: string; status: "done" | "failed" | "skipped"; error?: string }[];
+  conflicts?: { id: string; label: string; message: string }[];
+  verificationProblems?: string[];
+  changes: Omit<ServiceChange, "patch">[];
+  state: { written: number; totalWrites: number; activated: boolean; verified: boolean };
+  recovery?: string[];
+  secretsNotVerified?: boolean;
 }

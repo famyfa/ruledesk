@@ -45,6 +45,12 @@ const SEED_GRIDS: Record<string, Record<string, Item[]>> = {
   unbound: { host_overrides: [{ enabled: "1", hostname: "fw", domain: "lan", rr: "A", server: "192.168.1.1", description: "Firewall" }] },
   gateways: { gateways: [{ disabled: "0", name: "WAN_GW", interface: "lan", gateway: "10.0.0.1", priority: "255", descr: "Default gateway" }] },
   routes: { routes: [{ disabled: "0", network: "10.9.0.0/16", gateway: "WAN_GW", descr: "Remote office" }] },
+  nat: { port_forward: [{ disabled: "0", interface: "wan", protocol: "TCP", destination_net: "wanip", destination_port: "443", target: "192.168.1.10", "local-port": "443", descr: "HTTPS to web" }] },
+  wireguard: {
+    servers: [{ enabled: "1", name: "wg0", pubkey: "MOCKPUBKEY", privkey: "mock-wg-private-do-not-leak", port: "51820", tunneladdress: "10.8.0.1/24" }],
+    clients: [{ enabled: "1", name: "laptop", pubkey: "PEERPUBKEY", psk: "mock-psk-do-not-leak", serveraddress: "vpn.example", serverport: "51820", tunneladdress: "10.8.0.2/32" }],
+  },
+  access: { users: [{ disabled: "0", name: "admin", scope: "system", descr: "System Administrator", user_dn: "", password: "mock-hash-do-not-leak", otp_seed: "MOCKOTPSEED" }], groups: [{ name: "admins", scope: "system", description: "Administrators", member: "admin" }] },
   vips: { vips: [{ interface: "lan", mode: "carp", subnet: "192.168.1.1", vhid: "1", password: "mock-carp-password", descr: "LAN VIP" }] },
 };
 

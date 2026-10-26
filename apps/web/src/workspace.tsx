@@ -32,7 +32,7 @@ const storageKey = (topologyHash: string, siteId: string) => `${STORAGE_PREFIX}$
 /** Remove every staged working copy from this tab (on sign-out). */
 export function clearDrafts() {
   try {
-    for (const k of Object.keys(sessionStorage)) if (k.startsWith(STORAGE_PREFIX) || k === "ruledeck.site") sessionStorage.removeItem(k);
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith(STORAGE_PREFIX) || k.startsWith("ruledeck.svc.") || k === "ruledeck.site") sessionStorage.removeItem(k);
   } catch {
     /* storage unavailable */
   }

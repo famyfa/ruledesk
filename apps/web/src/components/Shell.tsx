@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { canRedo, canUndo, redo, undo } from "@ruledeck/core";
+import { canRedo, canUndo, redo, SERVICES, undo } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
 import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
 import { HaBanner } from "./HaSwitch.tsx";
 
-export type Page = "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
+export type Page = `service:${string}` | "certificates" | "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
 /**
  * Panorama-style navigation: tabs along the top; tabs with sub-pages also show a
@@ -15,7 +15,7 @@ export type Page = "overview" | "global-rules" | "global-aliases" | "monitor" | 
 interface NavTab {
   id: string;
   label: string;
-  pages: { page: Page; label: string }[];
+  pages: { page: Page; label: string; group?: string }[];
   /** Show the left tree for this tab. */
   tree?: boolean;
 }
@@ -26,6 +26,15 @@ const TABS: NavTab[] = [
   { id: "policies", label: "Policies", tree: true, pages: [{ page: "rules", label: "Firewall Rules" }] },
   { id: "objects", label: "Objects", tree: true, pages: [{ page: "aliases", label: "Aliases" }] },
   { id: "global", label: "Global", tree: true, pages: [{ page: "global-rules", label: "Rules, all sites" }, { page: "global-aliases", label: "Aliases, all sites" }] },
+  {
+    id: "services",
+    label: "Services",
+    tree: true,
+    pages: [
+      ...(["DHCP & DNS", "Network", "Firewall", "System", "Security"] as const).flatMap((group) => SERVICES.filter((s) => s.group === group).map((s) => ({ page: `service:${s.id}` as Page, label: s.label, group }))),
+      { page: "certificates", label: "Certificates", group: "Security" as const },
+    ],
+  },
   { id: "sites", label: "Sites", pages: [{ page: "sites", label: "Sites" }] },
   { id: "changes", label: "Changes", pages: [{ page: "changes", label: "Pending Changes" }] },
   { id: "history", label: "History", pages: [{ page: "history", label: "History" }] },
@@ -176,8 +185,9 @@ export function Shell({
           <nav className="tree" aria-label={`${activeTab.label} sections`}>
             <h2>{activeTab.label}</h2>
             <ul>
-              {activeTab.pages.map((p) => (
-                <li key={p.page}>
+              {activeTab.pages.map((p, i) => (
+                <li key={p.page} className={p.group && p.group !== activeTab.pages[i - 1]?.group ? "tree-group-start" : undefined}>
+                  {p.group && p.group !== activeTab.pages[i - 1]?.group && <div className="tree-group">{p.group}</div>}
                   <button type="button" className={page === p.page ? "active" : ""} aria-current={page === p.page ? "page" : undefined} onClick={() => setPage(p.page)}>
                     {p.label}
                     {counts[p.page] !== undefined && <span className="tree-count">{counts[p.page]}</span>}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, setUnauthenticatedHandler, type ApiErrorBody, type SessionView } from "./api.ts";
 import { clearDrafts, WorkspaceProvider } from "./workspace.tsx";
 import { Shell, type Page } from "./components/Shell.tsx";
+import { serviceById } from "@ruledeck/core";
 import { SignInPage } from "./components/SignIn.tsx";
 import { RulesPage } from "./pages/RulesPage.tsx";
 import { AliasesPage } from "./pages/AliasesPage.tsx";
@@ -9,11 +10,14 @@ import { HistoryPage, OverviewPage, SettingsPage, SitesPage } from "./pages/Othe
 import { ChangesPage } from "./pages/ChangesPage.tsx";
 import { MonitorPage } from "./pages/MonitorPage.tsx";
 import { GlobalPage } from "./pages/GlobalPage.tsx";
+import { ServicePage } from "./pages/ServicePage.tsx";
+import { CertificatesPage } from "./pages/CertificatesPage.tsx";
 
-const PAGES: Page[] = ["overview", "global-rules", "global-aliases", "monitor", "sites", "rules", "aliases", "changes", "history", "settings"];
+const PAGES: Page[] = ["certificates", "overview", "global-rules", "global-aliases", "monitor", "sites", "rules", "aliases", "changes", "history", "settings"];
 
 function pageFromHash(): Page {
   const h = location.hash.replace(/^#\/?/, "") as Page;
+  if (h.startsWith("service:") && serviceById(h.slice("service:".length))) return h;
   return PAGES.includes(h) ? h : "rules";
 }
 
@@ -93,6 +97,8 @@ export function App() {
       >
         {page === "rules" && <RulesPage key={focusRule ?? "rules"} initialActiveId={focusRule} />}
         {page === "aliases" && <AliasesPage onShowRule={showRule} />}
+        {page.startsWith("service:") && serviceById(page.slice("service:".length)) && <ServicePage key={page} def={serviceById(page.slice("service:".length))!} />}
+        {page === "certificates" && <CertificatesPage />}
         {page === "global-rules" && <GlobalPage kind="rules" onShowRule={showRule} />}
         {page === "global-aliases" && <GlobalPage kind="aliases" onShowRule={showRule} />}
         {page === "monitor" && <MonitorPage onShowRule={showRule} />}

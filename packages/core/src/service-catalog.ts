@@ -38,7 +38,7 @@ export interface SettingsDef {
 export interface ServiceDef {
   id: string;
   label: string;
-  group: "Network" | "DHCP & DNS" | "System" | "Security";
+  group: "Network" | "DHCP & DNS" | "Firewall" | "System" | "Security";
   description: string;
   settings?: SettingsDef;
   grids: GridDef[];
@@ -65,10 +65,10 @@ function grid(
     label,
     root,
     search: `${base}/${cols.search ?? `search_${action}`}`,
-    get: `${base}/get_${action}`,
-    add: `${base}/add_${action}`,
-    set: `${base}/set_${action}`,
-    del: `${base}/del_${action}`,
+    get: action ? `${base}/get_${action}` : `${base}/get`,
+    add: action ? `${base}/add_${action}` : `${base}/add`,
+    set: action ? `${base}/set_${action}` : `${base}/set`,
+    del: action ? `${base}/del_${action}` : `${base}/del`,
     columns: cols.columns,
     nameFields: cols.name,
     keyFields: cols.key ?? cols.name,
@@ -194,6 +194,42 @@ export const SERVICES: ServiceDef[] = [
     reconfigure: "cron/service/reconfigure",
     grids: [grid("jobs", "Jobs", "cron/settings", "job", "job", { columns: ["enabled", "minutes", "hours", "days", "command", "description"], name: ["description", "command"], key: ["command", "parameters"], search: "search_jobs" })],
   },
+  // ---- read-only views (no writes from RuleDeck)
+  {
+    id: "nat",
+    label: "NAT",
+    group: "Firewall",
+    description: "Port forwards, outbound NAT, one-to-one and NPTv6 rules. Read-only here; automatic rules are not listed.",
+    readOnly: true,
+    grids: [
+      grid("port_forward", "Port forwards", "firewall/d_nat", "rule", "rule", { columns: ["disabled", "interface", "protocol", "destination_net", "destination_port", "target", "local-port", "descr"], name: ["descr"], key: ["interface", "protocol", "destination_net", "destination_port"] }),
+      grid("outbound", "Outbound NAT", "firewall/source_nat", "rule", "rule", { columns: ["enabled", "interface", "source_net", "destination_net", "target", "descr"], name: ["descr"], key: ["interface", "source_net", "destination_net"] }),
+      grid("one_to_one", "One-to-one", "firewall/one_to_one", "rule", "rule", { columns: ["enabled", "interface", "external", "source_net", "destination_net", "descr"], name: ["descr"], key: ["external", "source_net"] }),
+      grid("npt", "NPTv6", "firewall/npt", "rule", "rule", { columns: ["enabled", "interface", "source_net", "destination_net", "descr"], name: ["descr"], key: ["source_net", "destination_net"] }),
+    ],
+  },
+  {
+    id: "wireguard",
+    label: "WireGuard",
+    group: "Security",
+    description: "WireGuard instances and peers. Read-only here; private and pre-shared keys are never shown.",
+    readOnly: true,
+    grids: [
+      grid("servers", "Instances", "wireguard/server", "server", "server", { columns: ["enabled", "name", "pubkey", "port", "tunneladdress"], name: ["name"] }),
+      grid("clients", "Peers", "wireguard/client", "client", "client", { columns: ["enabled", "name", "pubkey", "serveraddress", "serverport", "tunneladdress"], name: ["name"] }),
+    ],
+  },
+  {
+    id: "access",
+    label: "Users & groups",
+    group: "Security",
+    description: "Local users and groups. Read-only here; passwords, API keys and OTP seeds are never shown.",
+    readOnly: true,
+    grids: [
+      grid("users", "Users", "auth/user", "", "user", { columns: ["disabled", "name", "scope", "descr", "user_dn"], name: ["name"], search: "search" }),
+      grid("groups", "Groups", "auth/group", "", "group", { columns: ["name", "scope", "description", "member"], name: ["name"], search: "search" }),
+    ],
+  },
 ];
 
 export function serviceById(id: string): ServiceDef | undefined {
@@ -208,7 +244,7 @@ export function gridById(svc: ServiceDef, id: string): GridDef | undefined {
  * Fields that must never reach the browser, the logs or a change list:
  * passwords, keys, secrets. They are shown as write-only inputs.
  */
-const SECRET_RE = /(password|passwd|passphrase|secret|psk|prv|private_?key|privkey|token|community|api_?key|pre_?shared)|(^|_)pass$/i;
+const SECRET_RE = /(password|passwd|passphrase|secret|psk|prv|private_?key|privkey|token|community|api_?key|pre_?shared|seed)|(^|_)pass$/i;
 export function isSecretField(name: string): boolean {
   const last = name.split(".").pop() ?? name;
   return SECRET_RE.test(last);
