@@ -210,4 +210,16 @@ test.describe("Services", () => {
     const after = (await (await fetch(`${MOCK_MUC}/__mock/services`)).json()) as typeof before;
     expect(Object.values(after.dnsmasq.grids.hosts).find((h) => h.host === "nas")!.ip).toBe("192.168.1.77");
   });
+
+  test("a typed secret is never written to browser storage", async ({ page }) => {
+    await login(page);
+    await openService(page, /DHCPv4/);
+    await page.getByLabel("Ddns domain key secret").fill("typed-secret-123");
+    await page.getByLabel("Valid lifetime").fill("4500");
+    await expect(page.getByRole("status").filter({ hasText: "1 staged change" })).toBeVisible(); // both are general settings
+    const stored = await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(sessionStorage))));
+    expect(stored).toContain("4500"); // the draft is saved...
+    expect(stored).not.toContain("typed-secret-123"); // ...without the secret
+  });
 });
+

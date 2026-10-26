@@ -1,4 +1,4 @@
-import { computeServiceChanges, createServiceWc, type ServiceDef, type ServiceWc } from "@ruledeck/core";
+import { computeServiceChanges, createServiceWc, type Item, type ServiceDef, type ServiceWc } from "@ruledeck/core";
 import { api } from "./api.ts";
 
 /**
@@ -18,11 +18,22 @@ export function loadDraft(key: string): ServiceWc | null {
   }
 }
 
-/** Save the draft, or drop it when nothing is staged. */
+/** A copy without typed secrets: passwords and keys stay in memory only, never in browser storage. */
+function withoutSecrets(wc: ServiceWc): ServiceWc {
+  const secrets = new Set(wc.baseline.secrets);
+  const strip = (item: Item): Item => Object.fromEntries(Object.entries(item).map(([k, v]) => [k, secrets.has(k) ? "" : v]));
+  return {
+    baseline: { ...wc.baseline, options: {} },
+    settings: wc.settings ? strip(wc.settings) : null,
+    grids: Object.fromEntries(Object.entries(wc.grids).map(([g, rows]) => [g, rows.map((r) => ({ id: r.id, item: strip(r.item) }))])),
+  };
+}
+
+/** Save the draft (without secrets), or drop it when nothing is staged. */
 export function saveDraft(siteId: string, def: ServiceDef, wc: ServiceWc | null): void {
   const key = draftKey(siteId, def.id);
   try {
-    if (wc && computeServiceChanges(def, wc).length) sessionStorage.setItem(key, JSON.stringify({ ...wc, baseline: { ...wc.baseline, options: {} } }));
+    if (wc && computeServiceChanges(def, wc).length) sessionStorage.setItem(key, JSON.stringify(withoutSecrets(wc)));
     else sessionStorage.removeItem(key);
   } catch {
     /* storage unavailable: edits stay in memory */

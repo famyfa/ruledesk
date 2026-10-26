@@ -104,6 +104,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header("x-frame-options", "DENY");
     reply.header("referrer-policy", "no-referrer");
     reply.header("cache-control", "no-store");
+    reply.header("cross-origin-opener-policy", "same-origin");
+    reply.header("cross-origin-resource-policy", "same-origin");
+    reply.header("permissions-policy", "camera=(), microphone=(), geolocation=(), usb=(), payment=()");
+    // Only when served over HTTPS (secure cookies): tell browsers to keep using HTTPS.
+    if (config.cookieSecure) reply.header("strict-transport-security", "max-age=31536000");
     reply.header(
       "content-security-policy",
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
@@ -202,7 +207,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // ------------------------------------------------------------------ auth
   app.get("/api/health", async () => ({ status: "ok" }));
-  app.get("/api/topology", async () => publicTopology(topology));
+  app.get("/api/topology", async (req) => publicTopology(topology, !!req.session));
 
   app.post("/api/auth/login", async (req, reply) => {
     const body = LoginBody.safeParse(req.body);

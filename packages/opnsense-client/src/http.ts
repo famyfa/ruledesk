@@ -67,6 +67,27 @@ export function makeDispatcher(caPem?: string, tlsFingerprint?: string): Agent {
   });
 }
 
+/** Largest answer RuleDeck reads from a firewall. A misbehaving or hostile peer can't exhaust memory. */
+export const MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+
+/** Read a response body as text, refusing anything larger than `max` bytes (checked while streaming). */
+export async function readCapped(res: { headers: Headers; body: ReadableStream<Uint8Array> | null }, max: number, endpoint: string): Promise<string> {
+  const declared = Number(res.headers.get("content-length") ?? "0");
+  if (declared > max) {
+    await res.body?.cancel().catch(() => {});
+    throw new OpnsenseError("protocol", "The firewall's answer is too large.", { endpoint });
+  }
+  if (!res.body) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of res.body) {
+    total += chunk.byteLength;
+    if (total > max) throw new OpnsenseError("protocol", "The firewall's answer is too large.", { endpoint }); // leaving the loop cancels the stream
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 /**
@@ -157,7 +178,10 @@ export class OpnsenseHttp {
       throw new OpnsenseError("auth", "The firewall session has ended. Sign in again.", { endpoint, status: res.status });
     }
     let body: unknown = null;
-    const text = await res.text().catch(() => "");
+    const text = await readCapped(res as unknown as { headers: Headers; body: ReadableStream<Uint8Array> | null }, MAX_RESPONSE_BYTES, endpoint).catch((e) => {
+      if (e instanceof OpnsenseError) throw e;
+      return "";
+    });
     if (text) {
       try {
         body = JSON.parse(text);

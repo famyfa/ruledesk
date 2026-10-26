@@ -121,12 +121,15 @@ export function loadTopology(path: string): Topology {
   return parseTopology(text);
 }
 
-/** What anyone (even before sign-in) may see: no URLs. */
-export function publicTopology(t: Topology) {
+/**
+ * What anyone (even before sign-in) may see: site names, no URLs. The interface map
+ * (keys and labels, not secret but internal) only for signed-in users.
+ */
+export function publicTopology(t: Topology, signedIn = false) {
   return {
     hash: t.hash,
     // The interface map is not secret (names, keys, labels); the browser needs it to build the shared policy view.
-    sites: t.sites.map((s) => ({ id: s.id, name: s.name, hasSecondary: !!s.secondary, interfaces: s.interfaces ?? null })),
-    logicalInterfaces: Object.keys(t.sites[0]?.interfaces ?? {}),
+    sites: t.sites.map((s) => ({ id: s.id, name: s.name, hasSecondary: !!s.secondary, interfaces: signedIn ? (s.interfaces ?? null) : null })),
+    logicalInterfaces: signedIn ? Object.keys(t.sites[0]?.interfaces ?? {}) : [],
   };
 }

@@ -1,6 +1,6 @@
 import { fetch, type Agent } from "undici";
 import { mapTransportError, OpnsenseError } from "./errors.ts";
-import { makeDispatcher, validateBaseUrl, type Credentials, type EndpointConfig } from "./http.ts";
+import { makeDispatcher, readCapped, validateBaseUrl, type Credentials, type EndpointConfig } from "./http.ts";
 
 /**
  * Sign in to the OPNsense web GUI with the user's own username and password,
@@ -52,9 +52,8 @@ export function parseCsrfHeaderToken(html: string): string | null {
 }
 
 async function readLimited(res: Awaited<ReturnType<typeof fetch>>): Promise<string> {
-  // Login pages are small; cap what we read from an unexpected response.
-  const text = await res.text();
-  return text.length > MAX_HTML ? text.slice(0, MAX_HTML) : text;
+  // Login pages are small; refuse to read a huge answer instead of buffering it.
+  return readCapped(res as unknown as { headers: Headers; body: ReadableStream<Uint8Array> | null }, MAX_HTML, "login");
 }
 
 export async function loginWithPassword(endpoint: EndpointConfig, username: string, password: string): Promise<LoginResult> {

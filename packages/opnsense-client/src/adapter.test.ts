@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readCapped } from "./http.ts";
 import { aliasFromRecord, aliasToRecord, fingerprint, flattenRecord, ruleChangedFields, ruleFromRecord, ruleToRecord, RULE_VOLATILE, uniqueRuleIds, logEntryFromRecord } from "./adapter.ts";
 import { featuresFor, parseVersion } from "./version.ts";
 import { apiPath, validateBaseUrl } from "./http.ts";
@@ -209,5 +210,27 @@ describe("firewall log rows", () => {
     expect(e.ruleLabel).toHaveLength(256);
     expect(e.action).toBe("");
     expect(e.protocol).toBe("");
+  });
+});
+
+describe("reading firewall answers", () => {
+  const res = (text: string, declared?: number) => {
+    const bytes = new TextEncoder().encode(text);
+    return {
+      headers: new Headers(declared !== undefined ? { "content-length": String(declared) } : {}),
+      body: new ReadableStream<Uint8Array>({
+        start(c) {
+          for (let i = 0; i < bytes.length; i += 4) c.enqueue(bytes.slice(i, i + 4));
+          c.close();
+        },
+      }),
+    };
+  };
+  it("reads normal answers", async () => {
+    expect(await readCapped(res('{"a":1}'), 100, "x")).toBe('{"a":1}');
+  });
+  it("refuses answers over the cap, declared or streamed", async () => {
+    await expect(readCapped(res("x".repeat(50), 9999), 10, "x")).rejects.toThrow(/too large/);
+    await expect(readCapped(res("x".repeat(50)), 10, "x")).rejects.toThrow(/too large/);
   });
 });

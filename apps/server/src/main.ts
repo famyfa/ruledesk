@@ -19,6 +19,13 @@ try {
   }
   app.log.info(`Topology: ${config.topology.sites.map((s) => s.name).join(", ")}${config.allowWrites ? "" : " (writes disabled)"}`);
   await app.listen({ host: config.host, port: config.port });
+  // docker stop / Ctrl+C: close cleanly, which ends every session and logs out of the firewalls.
+  for (const sig of ["SIGTERM", "SIGINT"] as const) {
+    process.once(sig, () => {
+      app.log.info(`${sig}: signing out of all firewalls and stopping.`);
+      void app.close().finally(() => process.exit(0));
+    });
+  }
 } catch (err) {
   if (err instanceof ConfigError) {
     console.error(`RuleDeck configuration error: ${err.message}`);

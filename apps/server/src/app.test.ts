@@ -73,8 +73,10 @@ describe("topology", () => {
     const pub = publicTopology(parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { secondary: { url: "https://a2" } })] })));
     expect(pub.sites[0]).toEqual({ id: "a", name: "a", hasSecondary: true, interfaces: null });
     // The interface map is public (names, keys, labels), nothing else of a site is.
-    const withMap = publicTopology(parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { interfaces: { DMZ: { key: "opt1", label: "DMZ" } } })] })));
+    const mapped = parseTopology(JSON.stringify({ version: 1, sites: [site("a", "https://a", { interfaces: { DMZ: { key: "opt1", label: "DMZ" } } })] }));
+    const withMap = publicTopology(mapped, true);
     expect(withMap.sites[0]!.interfaces).toEqual({ DMZ: { key: "opt1", label: "DMZ" } });
+    expect(publicTopology(mapped).sites[0]!.interfaces).toBeNull(); // not before sign-in
     expect(JSON.stringify(withMap)).not.toContain("https://a");
   });
 
@@ -420,5 +422,15 @@ describe("HA routes", () => {
     expect(sw.json().error.kind).toBe("writes_disabled");
     expect((await ro.inject({ method: "GET", url: "/api/sites/ber/ha", headers: { cookie } })).statusCode).toBe(200);
     await ro.close();
+  });
+});
+
+describe("security headers", () => {
+  it("are set on every answer", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/health" });
+    for (const h of ["content-security-policy", "x-frame-options", "x-content-type-options", "referrer-policy", "cross-origin-opener-policy", "permissions-policy"]) {
+      expect(res.headers[h], h).toBeTruthy();
+    }
+    expect(res.headers["cache-control"]).toBe("no-store");
   });
 });

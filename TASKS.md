@@ -170,7 +170,7 @@ Must have
 - [ ] Live write verification on the lab: rules apply, aliases, services (one per type), HA switch, shared apply; fix what the real firewalls show
 - [ ] Packaging: Docker image built and run for real, docker-compose with a TLS reverse proxy example, install/upgrade guide, health endpoint, version shown in the UI, LICENSE, CHANGELOG, tagged release
 - [ ] CI (GitHub Actions): typecheck, unit, E2E on the mock, image build, dependency audit
-- [ ] Security review (sessions, CSRF, headers/CSP, rate limits, logs without secrets, dependency audit) and a short threat model in docs/security.md
+- [x] Security review (2026-10-26): 1 medium + 4 low findings fixed (secrets in browser drafts, response size cap, interface map before sign-in, headers/HSTS, logout on shutdown); results and residual risks in docs/security.md
 - [ ] Operator docs: docs/multi-site.md (shared vs sync), first-run guide, topology file, privileges needed per feature, recovery
 Should have
 - [ ] One place for all staged changes (rules, aliases, services, per site); sign-out warning counts all of them
