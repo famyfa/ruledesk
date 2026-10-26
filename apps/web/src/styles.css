@@ -2026,3 +2026,7 @@ fieldset.svc-ro {
   margin: 0;
   min-width: 0;
 }
+.svc-head-actions {
+  display: flex;
+  gap: 8px;
+}

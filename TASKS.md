@@ -150,11 +150,16 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 - [ ] Live test in the lab (planned window, one site first)
 
 ## 14. Site configuration (new, 2026-10-25)
-- [ ] Scope decision: which services first (DHCP, certificates, DNS, NTP, interfaces/VLANs, gateways, users) and read-only first, then edit
-- [ ] Research per service: API controller/endpoints in 26.7 source (never guess), required privileges, apply/reconfigure step, record in docs/api-compatibility.md
-- [ ] Generic "settings page" model: read -> form -> change set -> apply -> read back (same safety rules as rules: conflict check, review, no auto rollback)
-- [ ] DHCP: ranges, static mappings (Kea / ISC depending on version), sync between sites where it makes sense
-- [ ] Certificates: list, expiry warnings across all sites, import/renew/assign (private keys must never be stored or logged)
-- [ ] Compare a setting across sites (like the Global rules view) and push it to another site
-- [ ] Tests with every service; docs
-
+- [x] Scope: Kea DHCPv4/v6, Dnsmasq, Unbound, gateways, routes, VLANs, VIPs, syslog, cron (edit); NAT, WireGuard, users and groups (view); certificates (expiry overview)
+- [x] Research per service in the 26.7 source; reads verified on the lab with read-only keys; recorded in docs/api-compatibility.md
+- [x] Generic model: settings tree and tables as flat maps, option lists, secrets stripped on the server; stage -> review -> apply (conflict check, ordered writes, reconfigure, read-back); no automatic rollback
+- [x] Services tab with a left tree by group; forms generated from the firewall's own model; changed fields marked; drafts kept in the tab
+- [x] Certificates: whitelist (the firewall's list contains private keys), expiry per site, soonest first
+- [x] Sync to another site (matched by natural key, choices translated by label, secrets never copied), staged at the target
+- [x] Mock firewall implements the pattern; tests: core (flatten, change set, sync), server (apply, conflicts, partial, secrets), E2E
+- [x] docs/services.md
+- [ ] Live write test on the lab (one small change per service type, one site first): `add_*`, `set_*`, `del_*`, `reconfigure` are verified in source and by the mock only
+- [ ] Compare a service across all sites in one view (like Global rules)
+- [ ] Field labels and types from the OPNsense model XML instead of guessing (drop-down vs multi-select, numbers)
+- [ ] More services: Monit, IDS, DHCP relay, router advertisements, traffic shaper, captive portal, OpenVPN, IPsec; NAT editing once its apply path is verified
+- [ ] Certificates: create / import / renew / assign (private keys must never be stored or logged)

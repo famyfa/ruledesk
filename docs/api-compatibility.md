@@ -94,6 +94,26 @@ Behavior of `carp_set_status` (important for a safe switchover):
 
 Live findings (2026-10-26): `trust/cert/search` answers 200 on both primaries (certificate list; the row set includes `uuid`, `refid`, `descr`, `caref`; never print or log the other fields). In the firewall log the `rid` of the default deny rule is a hash (not `0`), its `label` is "Default deny / state violation rule".
 
+## Services (site configuration)
+
+Verified in the 26.7 source (controllers) and, for the read side, on the live lab (2026-10-26, read-only keys). See [services.md](services.md). All use the standard pattern: settings `get`/`set` with `{"<root>": {...}}`, tables `search_X` (POST, paged) / `get_X/{uuid}` / `add_X` / `set_X/{uuid}` / `del_X/{uuid}`, answers `{"result":"saved","uuid"}`, `{"result":"failed","validations":{...}}`, `{"result":"deleted"}`, and `reconfigure` (POST only; a GET answers `{"status":"failed"}` without doing anything).
+
+| Service | Live (read) | Notes |
+|---|---|---|
+| `kea/dhcpv4` (`get`, `set`, subnet, reservation, option, peer), `kea/dhcpv6` (+ `pd_pool`) | ✔ | Models `dhcpv4`/`dhcpv6`; one `kea/service/reconfigure` for both. `get` returns only `general`, `lexpire`, `ha`. Secret: `general.ddns_domain_key_secret` |
+| `dnsmasq/settings` (`get`, `set`, host, domain, tag, range, option, boot) | ✔ | `get` also contains the tables nested under uuid keys; RuleDeck skips those |
+| `unbound/settings` (`get`, `set`, host_override, host_alias, forward, acl, dnsbl) | ✔ | `forward` maps to `dots.dot` (DNS over TLS). Deleting a host override also deletes its aliases (done by the firewall) |
+| `routing/settings` (`*_gateway`, `reconfigure`) | ✔ | Delete is refused by the firewall while a gateway is in use |
+| `routes/routes` (`*_route`, `reconfigure`) | ✔ | |
+| `interfaces/vlan_settings`, `interfaces/vip_settings` (`*_item`, `reconfigure`) | ✔ | VIP `password` is a secret (CARP) |
+| `syslog/settings` (`get`, `set`, `*_destination`; search is `search_destinations`) | ✔ | |
+| `cron/settings` (`*_job`; search is `search_jobs`) | ✔ | |
+| `firewall/d_nat`, `source_nat`, `one_to_one`, `npt` (`search_rule`, `get_rule`) | ✔ | Automatic rules have no uuid and are not listed. Read-only in RuleDeck (apply path for NAT not verified) |
+| `wireguard/server`, `wireguard/client`, `auth/user`, `auth/group` | ✔ | Read-only. Secrets (`privkey`, `psk`, `password`, `otp_seed`) are dropped |
+| `trust/cert/search`, `trust/ca/search` | ✔ | **The rows contain `prv`, `prv_payload` and `crt_payload`.** RuleDeck whitelists fields on the server. `valid_from`/`valid_to` are epoch seconds |
+
+Not found on the lab firewalls (404): `ntpd/settings`, `dhcpv4/leases/search_lease`, `ipsec/connections/search`, `openvpn/instances/get_instance`.
+
 ## Feature flags by version
 
 | Flag | 25.7 | 26.1 | 26.7 |

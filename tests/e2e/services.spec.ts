@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { login, MOCK, resetMock } from "./helpers.ts";
+import { login, MOCK, MOCK_MUC, resetMock } from "./helpers.ts";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 
@@ -180,5 +180,34 @@ test.describe("Services", () => {
     const html = await page.content();
     expect(html).not.toContain("MOCKPRIVATEKEY");
     expect(html).not.toContain("BEGIN");
+  });
+
+  test("sync an entry to the other site: staged there, reviewed, applied", async ({ page }) => {
+    // Berlin got a different address for "nas" than Munich has.
+    await external({ service: "dnsmasq", grid: "hosts", match: { host: "nas" }, fields: { ip: "192.168.1.77", descr: "Storage (Berlin)" } });
+    await login(page);
+    await openService(page, /Dnsmasq/);
+    await page.getByRole("button", { name: "Sync to site…" }).click();
+    const dialog = page.getByRole("dialog", { name: /Sync Dnsmasq/ });
+    await dialog.getByLabel("Hosts: nas lan").check();
+    await expect(dialog.getByText(/1 changed/)).toBeVisible();
+    await expect(dialog.getByText("192.168.1.5 → 192.168.1.77")).toBeVisible();
+    await dialog.getByRole("button", { name: /^Stage 1 change/ }).click();
+    await expect(dialog.getByRole("status")).toContainText("Nothing has been sent to the firewall yet");
+    await dialog.getByRole("button", { name: /^Open .* to review/ }).click();
+
+    // at Munich it is a staged change; Munich's firewall is untouched
+    await page.getByRole("tab", { name: /^Hosts/ }).click();
+    await expect(page.getByRole("status").filter({ hasText: "1 staged change" })).toBeVisible();
+    const before = (await (await fetch(`${MOCK_MUC}/__mock/services`)).json()) as { dnsmasq: { grids: { hosts: Record<string, { host: string; ip: string }> } } };
+    expect(Object.values(before.dnsmasq.grids.hosts).find((h) => h.host === "nas")!.ip).toBe("192.168.1.5");
+
+    await page.getByRole("button", { name: "Review & apply…" }).click();
+    const review = page.getByRole("region", { name: /Apply to/ });
+    await review.getByLabel("I reviewed the changes listed above.").check();
+    await review.getByRole("button", { name: /^Apply 1 change/ }).click();
+    await expect(page.getByRole("region", { name: "Apply result" })).toContainText("Applied and verified");
+    const after = (await (await fetch(`${MOCK_MUC}/__mock/services`)).json()) as typeof before;
+    expect(Object.values(after.dnsmasq.grids.hosts).find((h) => h.host === "nas")!.ip).toBe("192.168.1.77");
   });
 });

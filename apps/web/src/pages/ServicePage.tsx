@@ -16,24 +16,14 @@ import {
 } from "@ruledeck/core";
 import { api, ApiError, type ServiceApplyResult } from "../api.ts";
 import { ItemForm, humanize } from "../components/ServiceForm.tsx";
+import { ServiceSyncDialog } from "../components/ServiceSyncDialog.tsx";
+import { draftKey, loadDraft, saveDraft } from "../serviceDrafts.ts";
 import { useWorkspace } from "../workspace.tsx";
 
 /**
  * One service (DHCP, DNS, gateways, ...): general settings and its tables, staged locally,
  * reviewed, then applied to the site with a read-back. Same rules as for firewall rules.
  */
-
-const DRAFT_PREFIX = "ruledeck.svc.";
-const draftKey = (siteId: string, svc: string) => `${DRAFT_PREFIX}${siteId}.${svc}`;
-
-function loadDraft(key: string): ServiceWc | null {
-  try {
-    const raw = sessionStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as ServiceWc) : null;
-  } catch {
-    return null;
-  }
-}
 
 function useServiceWc(def: ServiceDef) {
   const { siteId, promptSignIn } = useWorkspace();
@@ -45,13 +35,7 @@ function useServiceWc(def: ServiceDef) {
 
   const persist = useCallback(
     (next: ServiceWc | null) => {
-      if (!siteId) return;
-      try {
-        if (next && computeServiceChanges(def, next).length) sessionStorage.setItem(draftKey(siteId, def.id), JSON.stringify({ ...next, baseline: { ...next.baseline, options: {} } }));
-        else sessionStorage.removeItem(draftKey(siteId, def.id));
-      } catch {
-        /* storage unavailable: edits stay in memory */
-      }
+      if (siteId) saveDraft(siteId, def, next);
     },
     [siteId, def],
   );
@@ -103,12 +87,20 @@ function useServiceWc(def: ServiceDef) {
 const optionLabel = (options: OptionChoice[] | undefined, value: string) =>
   options && value ? value.split(",").map((v) => options.find((o) => o.value === v)?.label || v).join(", ") : value;
 
+/** Cell text: choices by label, enabled/disabled flags as a mark. */
+function cellText(options: OptionChoice[] | undefined, field: string, value: string): string {
+  if ((field === "enabled" || field === "disabled") && (value === "0" || value === "1")) return (field === "enabled") === (value === "1") ? "✓" : "–";
+  return optionLabel(options, value);
+}
+
 export function ServicePage({ def }: { def: ServiceDef }) {
   const { siteId, site } = useWorkspace();
   const { wc, setWc, load, error, loading, options, restored } = useServiceWc(def);
   const [tab, setTab] = useState(def.settings ? "settings" : def.grids[0]!.id);
   const [editing, setEditing] = useState<{ grid: GridDef; id: string | null; item: Item } | null>(null);
   const [review, setReview] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const { sites } = useWorkspace();
 
   useEffect(() => {
     setTab(def.settings ? "settings" : def.grids[0]!.id);
@@ -145,10 +137,18 @@ export function ServicePage({ def }: { def: ServiceDef }) {
           <h2>{def.label}</h2>
           <p className="muted">{def.description}</p>
         </div>
+        <div className="svc-head-actions">
+          {!ro && sites.filter((x) => x.signedIn).length > 1 && (
+            <button type="button" onClick={() => setSyncOpen(true)} title="Copy settings or entries to another site (staged there for review)">
+              Sync to site…
+            </button>
+          )}
         <button type="button" onClick={() => void load(changes.length === 0)} disabled={loading || changes.length > 0} title={changes.length ? "Apply or discard your staged changes first" : "Read again from the firewall"}>
           ↻ Reload
         </button>
+        </div>
       </div>
+      {syncOpen && siteId && <ServiceSyncDialog def={def} fromId={siteId} onClose={() => setSyncOpen(false)} />}
       {def.warning && (
         <div className="banner banner-warn" role="note">
           {def.warning}
@@ -335,7 +335,7 @@ function GridTable({
                   <td>{isNew ? <span className="tag tag-create">NEW</span> : changed.has(r.id) ? <span className="tag tag-modify">MOD</span> : null}</td>
                   {cols.map((c, i) => (
                     <td key={c} className={i === 0 ? "cell-name" : undefined} onClick={i === 0 ? () => onEdit(r.id) : undefined}>
-                      {optionLabel(options[`${grid.id}:${c}`], r.item[c] ?? "") || <span className="muted">—</span>}
+                      {cellText(options[`${grid.id}:${c}`], c, r.item[c] ?? "") || <span className="muted">—</span>}
                     </td>
                   ))}
                   <td className="row-actions">
@@ -357,7 +357,7 @@ function GridTable({
                   <span className="tag tag-delete">DEL</span>
                 </td>
                 {cols.map((c) => (
-                  <td key={c}>{optionLabel(options[`${grid.id}:${c}`], r.item[c] ?? "")}</td>
+                  <td key={c}>{cellText(options[`${grid.id}:${c}`], c, r.item[c] ?? "")}</td>
                 ))}
                 <td className="row-actions">
                   <button type="button" onClick={() => onRestore(r.id)}>
