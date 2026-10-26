@@ -3,6 +3,7 @@ import { addFilterTerm, LOG_FILTER_FIELDS, logRecord, type FilterOp, type Firewa
 import { api, ApiError } from "../api.ts";
 import { FilterInput, useFilter } from "../components/FilterInput.tsx";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "../components/icons.tsx";
 
 /**
  * Live firewall log of the primary firewall(s) (read-only): one site, or all
@@ -169,7 +170,15 @@ export function MonitorPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
         </select>
         <FilterInput value={expr} onChange={setExpr} fields={LOG_FILTER_FIELDS} error={filter.error} label="Filter log" />
         <button type="button" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
-          {paused ? "▶ Resume" : "⏸ Pause"}
+          {paused ? (
+            <>
+              <Icon name="play" /> Resume
+            </>
+          ) : (
+            <>
+              <Icon name="pause" /> Pause
+            </>
+          )}
         </button>
         <button type="button" className="ghost" onClick={() => setClearedAt((n) => n + 1)} title="Clear the list and start again from the newest lines">
           Clear
@@ -180,7 +189,7 @@ export function MonitorPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
           </button>
         )}
         <span className="count" role="status">
-          {paused ? "Paused" : status === "loading" ? "Loading…" : status === "error" ? "Not updating" : "● Live"} · {shown.length}
+          {paused ? "Paused" : status === "loading" ? "Loading…" : status === "error" ? "Not updating" : <><Icon name="dot" className="live-dot" /> Live</>} · {shown.length}
           {shown.length !== all.length ? ` of ${all.length}` : ""} lines
           {lastPoll && !paused && status === "live" ? ` · ${lastPoll.toLocaleTimeString()}` : ""}
         </span>

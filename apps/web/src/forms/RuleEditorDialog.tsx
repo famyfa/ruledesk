@@ -9,6 +9,7 @@ import {
 } from "@ruledeck/core";
 import type { ObjectContext } from "../grid/objects.ts";
 import { AddressField, InterfacesField, PortField } from "./fields.tsx";
+import { Icon } from "../components/icons.tsx";
 
 /**
  * Rule editor: one dialog with tabs. Nothing reaches the working
@@ -118,7 +119,7 @@ export function RuleEditorDialog({
           {TABS.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
               {t}
-              {tabErrors(t) > 0 && <span className="tab-error" aria-label={`${tabErrors(t)} problems`}> ⚠{tabErrors(t)}</span>}
+              {tabErrors(t) > 0 && <span className="tab-error" aria-label={`${tabErrors(t)} problems`}> <Icon name="warn" />{tabErrors(t)}</span>}
             </button>
           ))}
         </div>

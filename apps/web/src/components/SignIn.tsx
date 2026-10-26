@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api, ApiError, parseApiKeyFile, type ApiErrorBody, type PublicTopology, type SessionView, type SiteLogin } from "../api.ts";
+import { Icon } from "./icons.tsx";
 
 /** Fields for one site's credentials (OPNsense username/password, or an API key). */
 interface Creds {
@@ -110,7 +111,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: (s: SessionView, errors
       <form className="login login-wide" onSubmit={submit}>
         <h1>
           <span className="brand-mark" aria-hidden>
-            ▦
+            <Icon name="brand" size={22} />
           </span>{" "}
           RuleDeck
         </h1>
@@ -142,7 +143,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: (s: SessionView, errors
           <ul className="site-errors" role="alert">
             {Object.entries(errors).map(([siteId, e]) => (
               <li key={siteId}>
-                ✗ <strong>{topology.sites.find((s) => s.id === siteId)?.name ?? siteId}</strong>: {e.message}
+                <Icon name="fail" /> <strong>{topology.sites.find((s) => s.id === siteId)?.name ?? siteId}</strong>: {e.message}
               </li>
             ))}
           </ul>

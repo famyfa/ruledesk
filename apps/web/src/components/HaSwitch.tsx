@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { describeHa } from "@ruledeck/core";
 import { api, ApiError, type HaSwitchResult, type HaView } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "./icons.tsx";
 
 /**
  * HA status of a site and the graceful switchover (CARP maintenance mode on the
@@ -131,7 +132,7 @@ export function HaSwitchDialog({ siteId, siteName, view, onClose }: { siteId: st
             <ul className="check-list" aria-label="Checks">
               {gate.checks.map((c) => (
                 <li key={c.id} className={c.ok ? "ok" : "bad"}>
-                  <span aria-hidden>{c.ok ? "✓" : "✗"}</span> {c.text}
+                  <Icon name={c.ok ? "ok" : "fail"} /> {c.text}
                 </li>
               ))}
             </ul>

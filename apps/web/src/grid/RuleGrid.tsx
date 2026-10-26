@@ -17,12 +17,13 @@ import { useWorkspace } from "../workspace.tsx";
 import { COLUMNS } from "./columns.tsx";
 import { measureColumnWidths } from "./widths.ts";
 import type { ObjectContext } from "./objects.ts";
+import { Icon } from "../components/icons.tsx";
 
 const ROW_HEIGHT = 32;
 const LEAD = [
   { key: "select", width: 30 },
   { key: "status", width: 52 },
-  { key: "pos", width: 52 },
+  { key: "pos", width: 68 },
 ];
 
 interface Cell {
@@ -358,7 +359,7 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
         </button>
         {activeRule && (
           <span className="hint">
-            Double-click or Enter to edit · Ctrl+D clone · Alt+↑/↓ move · Del delete · Ctrl+C/V copy/paste · Ctrl+Z undo
+            Click a name or press Enter to edit · drag the # cell or Alt+↑/↓ to move · Ctrl+D clone · Del delete · Ctrl+C/V copy/paste · Ctrl+Z undo
           </span>
         )}
       </div>
@@ -457,19 +458,20 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                   <td className="sticky lead status-cell" style={{ left: leadLeft[1] }}>
                     <StatusTag status={status} readOnly={ro} invalid={!!issues} enabled={rule.enabled} />
                   </td>
-                  <td className="sticky lead pos-cell" style={{ left: leadLeft[2] }}>
-                    <span
-                      className={`drag-handle${ro ? " disabled" : ""}`}
-                      draggable={!ro}
-                      onDragStart={(e) => onDragStart(e, rule)}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setDropTarget(null);
-                      }}
-                      title={ro ? "Read-only rule" : "Drag to reorder (within its group)"}
-                      aria-hidden
-                    >
-                      ⋮⋮
+                  {/* The whole cell is the drag handle: a big target, not just the grip. */}
+                  <td
+                    className={`sticky lead pos-cell${ro ? " drag-disabled" : " draggable"}`}
+                    style={{ left: leadLeft[2] }}
+                    draggable={!ro}
+                    onDragStart={(e) => onDragStart(e, rule)}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setDropTarget(null);
+                    }}
+                    title={ro ? "Read-only rule: can't be moved" : "Drag to reorder (within its group)"}
+                  >
+                    <span className="drag-handle" aria-hidden>
+                      <Icon name="grip" size={18} />
                     </span>
                     {positions.get(rule.id)}
                   </td>
@@ -504,7 +506,7 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
                           {col.render(rule, ctx)}
                           {fieldIssues && (
                             <span className="cell-issue" aria-label={fieldIssues.join(" ")}>
-                              ⚠
+                              <Icon name="warn" />
                             </span>
                           )}
                         </div>
@@ -538,10 +540,10 @@ export function RuleGrid({ rows, ctx, selected, setSelected, activeId, setActive
 }
 
 function StatusTag({ status, readOnly, invalid, enabled }: { status: string; readOnly: boolean; invalid: boolean; enabled: boolean }) {
-  if (invalid) return <span className="tag tag-invalid" title="This rule has problems">⚠ ERR</span>;
+  if (invalid) return <span className="tag tag-invalid" title="This rule has problems"><Icon name="warn" /> ERR</span>;
   if (status === "added") return <span className="tag tag-added" title="New, staged locally">+ NEW</span>;
-  if (status === "modified") return <span className="tag tag-modified" title="Modified, staged locally">● MOD</span>;
-  if (readOnly) return <span className="tag tag-readonly" title="Legacy or automatic rule, read-only">🔒 RO</span>;
+  if (status === "modified") return <span className="tag tag-modified" title="Modified, staged locally"><Icon name="dot" /> MOD</span>;
+  if (readOnly) return <span className="tag tag-readonly" title="Legacy or automatic rule, read-only"><Icon name="lock" /> RO</span>;
   if (!enabled) return <span className="tag tag-off">off</span>;
   return null;
 }
@@ -554,21 +556,21 @@ function RowActions(props: { readOnly: boolean; onClone: () => void; onUp: () =>
   return (
     <span className="row-actions">
       <button type="button" tabIndex={-1} title="Inspect (Ctrl+I)" aria-label="Inspect rule" onClick={stop(props.onInspect)}>
-        ⓘ
+        <Icon name="info" />
       </button>
       {!props.readOnly && (
         <>
           <button type="button" tabIndex={-1} title="Clone (Ctrl+D)" aria-label="Clone rule" onClick={stop(props.onClone)}>
-            ⧉
+            <Icon name="copy" />
           </button>
           <button type="button" tabIndex={-1} title="Move up (Alt+↑)" aria-label="Move rule up" onClick={stop(props.onUp)}>
-            ↑
+            <Icon name="up" />
           </button>
           <button type="button" tabIndex={-1} title="Move down (Alt+↓)" aria-label="Move rule down" onClick={stop(props.onDown)}>
-            ↓
+            <Icon name="down" />
           </button>
           <button type="button" tabIndex={-1} title="Delete (Del)" aria-label="Delete rule" className="danger" onClick={stop(props.onDelete)}>
-            🗑
+            <Icon name="trash" />
           </button>
         </>
       )}

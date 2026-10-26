@@ -5,6 +5,7 @@ import { useWorkspace } from "../workspace.tsx";
 import { FilterInput, useFilter } from "../components/FilterInput.tsx";
 import { SyncDialog } from "../components/SyncDialog.tsx";
 import { AliasForm, RUNTIME_TYPES, type AliasDraft } from "../components/AliasForm.tsx";
+import { Icon } from "../components/icons.tsx";
 
 const ALIAS_ENV = { fields: ALIAS_FILTER_FIELDS };
 
@@ -103,11 +104,15 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
                   <tr className={`row-${status}${issues ? " row-invalid" : ""}`}>
                     <td>
                       {issues ? (
-                        <span className="tag tag-invalid">⚠ ERR</span>
+                        <span className="tag tag-invalid">
+                        <Icon name="warn" /> ERR
+                      </span>
                       ) : status === "added" ? (
                         <span className="tag tag-added">+ NEW</span>
                       ) : status === "modified" ? (
-                        <span className="tag tag-modified">● MOD</span>
+                        <span className="tag tag-modified">
+                        <Icon name="dot" /> MOD
+                      </span>
                       ) : null}
                     </td>
                     <td className="mono">
@@ -171,7 +176,7 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
                       <td colSpan={6}>
                         {refCount > 0 ? (
                           <p className="text-warn">
-                            ⚠ {a.name} is used by {refs.rules.length} rule(s){refs.aliases.length ? ` and ${refs.aliases.length} alias(es)` : ""}. Deleting it leaves those
+                            <Icon name="warn" /> {a.name} is used by {refs.rules.length} rule(s){refs.aliases.length ? ` and ${refs.aliases.length} alias(es)` : ""}. Deleting it leaves those
                             rules pointing at a missing alias; they will show errors and can't be applied until you fix them. The rules will
                             <strong> not</strong> turn into "any".
                           </p>
@@ -214,7 +219,9 @@ export function AliasesPage({ onShowRule }: { onShowRule: (ruleId: string) => vo
             {deletedAliases.map((a) => (
               <tr key={a.id} className="row-deleted">
                 <td>
-                  <span className="tag tag-deleted">− DEL</span>
+                  <span className="tag tag-deleted">
+                  <Icon name="minus" /> DEL
+                </span>
                 </td>
                 <td className="mono">
                   <s>{a.name}</s>

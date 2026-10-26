@@ -554,15 +554,32 @@ textarea {
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
-.drag-handle {
+.pos-cell.draggable {
   cursor: grab;
-  color: var(--border-strong);
-  margin-right: 4px;
   user-select: none;
-  letter-spacing: -2px;
 }
-.drag-handle.disabled {
+.pos-cell.draggable:active {
+  cursor: grabbing;
+}
+.pos-cell.drag-disabled {
   cursor: not-allowed;
+}
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -3px 6px -3px -2px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+.pos-cell.draggable:hover .drag-handle {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pos-cell.drag-disabled .drag-handle {
   opacity: 0.3;
 }
 
@@ -2136,4 +2153,24 @@ input[type="radio"] {
 .topbar .pending-button.has-pending {
   color: #ffb38a;
   border-color: #d94f00;
+}
+
+/* ---------------------------------------------------------------- icons (Lucide) */
+.icon {
+  display: inline-block;
+  vertical-align: -2px;
+  flex: none;
+}
+.icon-dot {
+  vertical-align: 1px;
+}
+.live-dot {
+  color: var(--pass);
+}
+.brand-mark .icon {
+  color: var(--accent);
+  vertical-align: -4px;
+}
+.check-list .icon {
+  vertical-align: -3px;
 }

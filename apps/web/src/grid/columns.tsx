@@ -12,6 +12,7 @@ import {
 } from "@ruledeck/core";
 import { aliasPreview, itemLabel, resolveAddressToken, resolvePortToken, type ObjectContext } from "./objects.ts";
 import { BADGE } from "../forms/pickerParts.tsx";
+import { Icon } from "../components/icons.tsx";
 
 export type EditorKind = "bool" | "select" | "text" | "address" | "port" | "interfaces" | "none";
 
@@ -129,7 +130,7 @@ export const COLUMNS: Column[] = [
     field: "enabled",
     render: (r) => (
       <span className={`bool ${r.enabled ? "on" : "off"}`} aria-label={r.enabled ? "Enabled" : "Disabled"}>
-        {r.enabled ? "✓" : "–"}
+        {r.enabled ? <Icon name="ok" /> : "–"}
       </span>
     ),
     copy: (r) => (r.enabled ? "yes" : "no"),
@@ -292,7 +293,7 @@ export const COLUMNS: Column[] = [
     field: "log",
     render: (r) => (
       <span className={`bool ${r.log ? "on" : "off"}`} aria-label={r.log ? "Logging on" : "Logging off"}>
-        {r.log ? "✓" : "–"}
+        {r.log ? <Icon name="ok" /> : "–"}
       </span>
     ),
     copy: (r) => (r.log ? "yes" : "no"),

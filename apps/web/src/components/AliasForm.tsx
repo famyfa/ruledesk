@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import { checkAliasEntries, parseEntryList, validateAliasName } from "@ruledeck/core";
+import { Icon } from "./icons.tsx";
 
 export interface AliasDraft {
   name: string;
@@ -118,7 +119,9 @@ export function AliasForm({ initial, types, existingNames, ownName, submitLabel,
       {invalid.length > 0 && (
         <ul className="entry-errors">
           {invalid.slice(0, 5).map((c, i) => (
-            <li key={i}>⚠ {c.error}</li>
+            <li key={i}>
+                <Icon name="warn" /> {c.error}
+              </li>
           ))}
           {invalid.length > 5 && <li>…and {invalid.length - 5} more</li>}
         </ul>

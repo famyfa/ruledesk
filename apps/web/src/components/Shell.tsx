@@ -5,6 +5,7 @@ import type { ApiErrorBody } from "../api.ts";
 import { ChangesPanel } from "./ChangesPanel.tsx";
 import { SiteSignInDialog } from "./SignIn.tsx";
 import { HaBanner } from "./HaSwitch.tsx";
+import { Icon } from "./icons.tsx";
 
 export type Page = `service:${string}` | "certificates" | "shared-rules" | "shared-aliases" | "shared-apply" | "shared-drift" | "overview" | "global-rules" | "global-aliases" | "monitor" | "sites" | "rules" | "aliases" | "changes" | "history" | "settings";
 
@@ -138,7 +139,7 @@ export function Shell({
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden>
-            ▦
+            <Icon name="brand" size={18} />
           </span>
           RuleDeck
         </div>
@@ -164,14 +165,22 @@ export function Shell({
             aria-expanded={drawerOpen}
             aria-controls="changes-drawer"
           >
-            {pending} pending{problems > 0 && <span className="text-error"> · {problems} ⚠</span>}
+            {pending} pending{problems > 0 && <span className="text-error"> · {problems} <Icon name="warn" /></span>}
           </button>
           <button type="button" className="primary" disabled={!pending || problems > 0} onClick={() => setPage(ws.shared ? "shared-apply" : "changes")} title={problems ? "Fix problems first" : ws.shared ? "Review the changes per site, then apply to all sites" : "Review the changes before applying"}>
             {ws.shared ? "Review & apply to all" : "Review & apply"}
           </button>
           <span className="sep" />
           <button type="button" className="ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle theme">
-            {theme === "dark" ? "☀ Light" : "☾ Dark"}
+            {theme === "dark" ? (
+              <>
+                <Icon name="sun" /> Light
+              </>
+            ) : (
+              <>
+                <Icon name="moon" /> Dark
+              </>
+            )}
           </button>
           <div className="user">
             {user}{" "}
@@ -244,10 +253,10 @@ export function Shell({
           )}
           <span className="spacer" />
           <button type="button" className="ghost" disabled={!wc || !canUndo(wc)} onClick={() => edit(undo)} title="Undo (Ctrl+Z)">
-            ↶ Undo
+            <Icon name="undo" /> Undo
           </button>
           <button type="button" className="ghost" disabled={!wc || !canRedo(wc)} onClick={() => edit(redo)} title="Redo (Ctrl+Y)">
-            ↷ Redo
+            <Icon name="redo" /> Redo
           </button>
           {confirmRefresh ? (
             <span className="confirm-inline">
@@ -277,7 +286,7 @@ export function Shell({
             </span>
           ) : (
             <button type="button" className="ghost" onClick={() => (pending ? setConfirmRefresh(true) : void reload())} title="Reload from the firewall">
-              ⟳ Refresh
+              <Icon name="refresh" /> Refresh
             </button>
           )}
         </div>
@@ -309,7 +318,7 @@ export function Shell({
         )}
         {externalChanges.length > 0 && (
           <div className="banner banner-warn" role="alert">
-            ⚠ {externalChanges.length} rule/alias object{externalChanges.length === 1 ? "" : "s"} changed on the firewall since you loaded it (someone else may be editing).
+            <Icon name="warn" /> {externalChanges.length} rule/alias object{externalChanges.length === 1 ? "" : "s"} changed on the firewall since you loaded it (someone else may be editing).
             Conflicts are checked again before anything is applied.{" "}
             {pending === 0 && (
               <button type="button" className="link-button" onClick={() => void reload({ discardLocal: true })}>

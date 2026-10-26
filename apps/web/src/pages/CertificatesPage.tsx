@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { certStatus, daysLeft, type CertificateInfo, type CertStatus } from "@ruledeck/core";
 import { api, ApiError } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "../components/icons.tsx";
 
 /**
  * Certificates and CAs of all signed-in sites with their expiry, soonest first.
@@ -62,7 +63,13 @@ export function CertificatesPage() {
           Only expired or expiring (30 days)
         </label>
         <button type="button" onClick={() => void load()} disabled={loading}>
-          {loading ? "Reading…" : "↻ Refresh"}
+          {loading ? (
+            "Reading…"
+          ) : (
+            <>
+              <Icon name="refresh" /> Refresh
+            </>
+          )}
         </button>
         <span className="count" role="status">
           {problems ? `${problems} need attention · ` : ""}

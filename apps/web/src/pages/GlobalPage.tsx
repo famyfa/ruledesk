@@ -14,6 +14,7 @@ import { api, ApiError } from "../api.ts";
 import { FilterInput, useFilter } from "../components/FilterInput.tsx";
 import { SyncDialog } from "../components/SyncDialog.tsx";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon, type IconName } from "../components/icons.tsx";
 
 /**
  * Rules or aliases of all signed-in sites side by side, so differences are
@@ -33,7 +34,8 @@ interface Row {
   idAt: Record<string, string>;
 }
 
-const CELL_TEXT: Record<SyncKind | "source", string> = { source: "● reference", same: "✓ same", update: "≠ differs", create: "— missing", blocked: "⚠ can't sync" };
+const CELL_TEXT: Record<SyncKind | "source", string> = { source: "reference", same: "same", update: "differs", create: "missing", blocked: "can't sync" };
+const CELL_ICON: Record<SyncKind | "source", IconName> = { source: "dot", same: "ok", update: "differs", create: "minus", blocked: "warn" };
 const CELL_CLASS: Record<SyncKind | "source", string> = { source: "cell-same", same: "cell-same", update: "cell-differs", create: "cell-missing", blocked: "cell-differs" };
 
 export function GlobalPage({ kind, onShowRule }: { kind: "rules" | "aliases"; onShowRule: (ruleId: string) => void }) {
@@ -144,7 +146,13 @@ export function GlobalPage({ kind, onShowRule }: { kind: "rules" | "aliases"; on
           Only differences
         </label>
         <button type="button" onClick={() => void load()} disabled={loading}>
-          {loading ? "Reading…" : "↻ Refresh"}
+          {loading ? (
+            "Reading…"
+          ) : (
+            <>
+              <Icon name="refresh" /> Refresh
+            </>
+          )}
         </button>
         <span className="count">
           {shown.length} of {rows.length} {kind}
@@ -206,7 +214,7 @@ export function GlobalPage({ kind, onShowRule }: { kind: "rules" | "aliases"; on
                   const c = r.cells[s.id]!;
                   return (
                     <td key={s.id} className={CELL_CLASS[c.kind]} title={c.note || undefined}>
-                      {CELL_TEXT[c.kind]}
+                      <Icon name={CELL_ICON[c.kind]} /> {CELL_TEXT[c.kind]}
                     </td>
                   );
                 })}

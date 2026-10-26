@@ -18,6 +18,7 @@ import {
 import { api, ApiError } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { FilterInput, useFilter } from "./FilterInput.tsx";
+import { Icon } from "./icons.tsx";
 
 /**
  * Copy rules or aliases from one site to another. Nothing is written to a
@@ -283,7 +284,7 @@ function PreviewRow({ item }: { item: SyncItem }) {
         ))}
         {item.warnings.map((w) => (
           <div key={w} className="muted">
-            ⚠ {w}
+            <Icon name="warn" /> {w}
           </div>
         ))}
       </td>

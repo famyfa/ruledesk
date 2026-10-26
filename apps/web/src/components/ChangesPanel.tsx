@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { discardAll, formatChangeSet, type Change } from "@ruledeck/core";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "./icons.tsx";
 
 const KIND_LABEL: Record<Change["kind"], string> = { create: "CREATE", modify: "MODIFY", delete: "DELETE", reorder: "MOVE" };
 
@@ -148,7 +149,7 @@ export function ChangesPanel({ onShowRule, onReview }: { onShowRule: (id: string
         <ul className="problem-list">
           {problems.map((p, i) => (
             <li key={i}>
-              ⚠{" "}
+              <Icon name="warn" />{" "}
               {p.type === "rule" ? (
                 <button type="button" className="link-button" onClick={() => onShowRule(p.id)}>
                   {labelFor(p)}

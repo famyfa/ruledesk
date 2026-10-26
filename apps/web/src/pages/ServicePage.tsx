@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   addGridItem,
@@ -19,6 +19,7 @@ import { ItemForm, humanize } from "../components/ServiceForm.tsx";
 import { ServiceSyncDialog } from "../components/ServiceSyncDialog.tsx";
 import { draftKey, loadDraft, saveDraft } from "../serviceDrafts.ts";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "../components/icons.tsx";
 
 /**
  * One service (DHCP, DNS, gateways, ...): general settings and its tables, staged locally,
@@ -88,8 +89,8 @@ const optionLabel = (options: OptionChoice[] | undefined, value: string) =>
   options && value ? value.split(",").map((v) => options.find((o) => o.value === v)?.label || v).join(", ") : value;
 
 /** Cell text: choices by label, enabled/disabled flags as a mark. */
-function cellText(options: OptionChoice[] | undefined, field: string, value: string): string {
-  if ((field === "enabled" || field === "disabled") && (value === "0" || value === "1")) return (field === "enabled") === (value === "1") ? "✓" : "–";
+function cellText(options: OptionChoice[] | undefined, field: string, value: string): ReactNode {
+  if ((field === "enabled" || field === "disabled") && (value === "0" || value === "1")) return (field === "enabled") === (value === "1") ? <Icon name="ok" /> : "–";
   return optionLabel(options, value);
 }
 
@@ -144,7 +145,7 @@ export function ServicePage({ def }: { def: ServiceDef }) {
             </button>
           )}
         <button type="button" onClick={() => void load(changes.length === 0)} disabled={loading || changes.length > 0} title={changes.length ? "Apply or discard your staged changes first" : "Read again from the firewall"}>
-          ↻ Reload
+          <Icon name="refresh" /> Reload
         </button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { lockoutWarnings } from "@ruledeck/core";
 import { ChangesPanel } from "../components/ChangesPanel.tsx";
 import { api, ApiError, type ApplyResult } from "../api.ts";
 import { useWorkspace } from "../workspace.tsx";
+import { Icon } from "../components/icons.tsx";
 
 /**
  * Pending changes, review, and apply. The flow is:
@@ -99,7 +100,9 @@ export function ChangesPage({ onShowRule }: { onShowRule: (id: string) => void }
 
           {risks.length > 0 && (
             <div className="risk-box" role="alert">
-              <h3>⚠ Possible lockout</h3>
+              <h3>
+            <Icon name="warn" /> Possible lockout
+          </h3>
               <ul>
                 {risks.map((r) => (
                   <li key={r.ruleId + r.message}>

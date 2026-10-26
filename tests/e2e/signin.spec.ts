@@ -41,7 +41,7 @@ test.describe("signing in with OPNsense accounts", () => {
     await expect(row.locator("td.col-log")).toHaveClass(/cell-modified/);
 
     await fetch(`${MOCK}/__mock/expire-sessions`, { method: "POST" });
-    await page.getByRole("button", { name: "⟳ Refresh" }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await page.getByRole("button", { name: "Only check for changes" }).click();
     const dialog = page.getByRole("dialog", { name: "Sign in to Berlin (mock)" });
     await expect(dialog).toBeVisible();
@@ -75,7 +75,7 @@ test.describe("signing in with OPNsense accounts", () => {
     await expect(page.getByRole("button", { name: /1 pending/ })).toBeVisible();
 
     await context.clearCookies(); // same effect as the server forgetting the session
-    await page.getByRole("button", { name: "⟳ Refresh" }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await page.getByRole("button", { name: "Only check for changes" }).click();
     await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 
