@@ -141,7 +141,7 @@ Work order follows section 15 of the spec: discovery docs first, then Phase 1, t
 
 ## 13. Graceful HA switch (new, 2026-10-25)
 - [x] Research (source): CARP status = `get_vip_status`; `carp_status/{enable|disable|maintenance}`; maintenance is a TOGGLE (read before, read back after). Recorded in docs/api-compatibility.md
-- [ ] Confirm the URLs and responses on the live lab with a read-only key (`get_vip_status`)
+- [x] Confirmed live (read-only keys): `get_vip_status` (5 VIPs/site, all MASTER on node 1), `get_pfsync_nodes`, `firewall/log`; `trust/cert/search` reachable
 - [ ] Show HA state per site (primary/backup, CARP status per VIP, sync status) in Sites and the header
 - [ ] "Switch over" flow: pre-checks (peer healthy, config in sync, no pending sync) -> demote primary (maintenance mode) -> wait for the peer to take the VIPs -> read back both nodes -> offer "switch back"
 - [ ] RuleDeck follows the new primary: writes/log go to the node that is primary at that moment (check before every apply, as today)

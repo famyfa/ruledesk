@@ -70,19 +70,19 @@ Every MVC save creates a new config history entry. That is RuleDeck's recovery m
 
 | Operation | Endpoint | Method | 26.7 | Live | Notes |
 |---|---|---|---|---|---|
-| Firewall log | `diagnostics/firewall/log` | GET | source | ☐ | Query `limit` (0 = all), `digest`. Newest first; stops after `limit` rows or at the row whose `__digest__` matches (that row is included, RuleDeck cuts it off). Row fields: `__timestamp__`, `__host__`, `__digest__`, `action`, `dir`, `interface` (device name, e.g. vtnet1), `ipversion`, `protoname`, `src`, `dst`, `srcport`, `dstport`, `rid` (rule uuid or pf label), `label`. Needs the privilege for Firewall: Log Files: Live View |
+| Firewall log | `diagnostics/firewall/log` | GET | source | ✔ 2026-10-26 | Query `limit` (0 = all), `digest`. Newest first; stops after `limit` rows or at the row whose `__digest__` matches (that row is included, RuleDeck cuts it off). Row fields: `__timestamp__`, `__host__`, `__digest__`, `action`, `dir`, `interface` (device name, e.g. vtnet1), `ipversion`, `protoname`, `src`, `dst`, `srcport`, `dstport`, `rid` (rule uuid or pf label), `label`. Needs the privilege for Firewall: Log Files: Live View |
 
 RuleDeck only reads this log from the HA primary, never stores it, and keeps just a whitelist of fields.
 
 ## High availability / CARP (switchover)
 
-Read from opnsense/core master source (`Diagnostics/Api/InterfaceController.php`, `scripts/interfaces/carp_set_status.php`, `carp_global_status.php`, `actions_interface.conf`). URL paths follow the usual camelCase -> snake_case convention and are **not yet confirmed live** (Live column).
+Read from opnsense/core master source (`Diagnostics/Api/InterfaceController.php`, `scripts/interfaces/carp_set_status.php`, `carp_global_status.php`, `actions_interface.conf`). URL paths follow the usual camelCase -> snake_case convention and are confirmed live for the read endpoints on 2026-10-26 (read-only keys, both primaries). `carp_status/{status}` (write) is not yet tried live.
 
 | Operation | Endpoint | Method | 26.7 | Live | Notes |
 |---|---|---|---|---|---|
-| VIP / CARP status | `diagnostics/interface/get_vip_status` | GET/POST | source | ☐ | Rows: `interface`, `vhid`, `advbase`, `advskew`, `subnet`, `status` (`MASTER`/`BACKUP`/`INIT`/`DISABLED`), `mode`, `status_txt`. Response also has a `carp` key from `interface show carp`: `demotion`, `allow`, `maintenancemode` (bool), `status_msg`. Optional POST field `mode` filters rows |
+| VIP / CARP status | `diagnostics/interface/get_vip_status` | GET/POST | source | ✔ 2026-10-26 | Rows: `interface`, `vhid`, `advbase`, `advskew`, `subnet`, `status` (`MASTER`/`BACKUP`/`INIT`/`DISABLED`), `mode`, `status_txt`. Response also has a `carp` key from `interface show carp`: `demotion`, `allow`, `maintenancemode` (bool), `status_msg`. Optional POST field `mode` filters rows. Live: 5 VIPs per site (WAN/MGMT/SERVER/DMZ/CLIENT), `rows` + `carp` as described, `maintenancemode:false` |
 | Set CARP state | `diagnostics/interface/carp_status/{status}` | POST | source | ☐ | `status`: `enable`, `disable`, `maintenance`. Anything else returns `{"status":"failed"}` |
-| Pfsync nodes | `diagnostics/interface/get_pfsync_nodes` | GET | source | ☐ | |
+| Pfsync nodes | `diagnostics/interface/get_pfsync_nodes` | GET | source | ✔ 2026-10-26 | |
 
 Behavior of `carp_set_status` (important for a safe switchover):
 
@@ -91,6 +91,8 @@ Behavior of `carp_set_status` (important for a safe switchover):
 - `enable`: `net.inet.carp.allow=1` and reconfigures the VIPs. Does not clear the maintenance flag.
 - Maintenance mode is persistent (survives reboot, it is in config.xml and replicates to the peer if config sync is on: check before use).
 - Not verified: the GUI labels and how the GUI page calls these actions.
+
+Live findings (2026-10-26): `trust/cert/search` answers 200 on both primaries (certificate list; the row set includes `uuid`, `refid`, `descr`, `caref`; never print or log the other fields). In the firewall log the `rid` of the default deny rule is a hash (not `0`), its `label` is "Default deny / state violation rule".
 
 ## Feature flags by version
 
