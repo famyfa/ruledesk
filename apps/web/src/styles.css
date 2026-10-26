@@ -7,18 +7,19 @@
   --fs-small: 12px;
   --radius: 4px;
 
-  --bg: #f4f5f7;
+  /* Light: modelled on the OPNsense theme (orange accent, neutral grays, dark header). */
+  --bg: #f1f1f1;
   --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --surface-3: #eef0f3;
-  --border: #d9dde3;
-  --border-strong: #b9c0ca;
-  --text: #1c2129;
-  --text-muted: #5f6b7a;
-  --accent: #2b6cb0;
+  --surface-2: #f7f7f7;
+  --surface-3: #ececec;
+  --border: #d9d9d9;
+  --border-strong: #b9b9b9;
+  --text: #212121;
+  --text-muted: #666666;
+  --accent: #d94f00;
   --accent-contrast: #ffffff;
-  --accent-soft: #e3eefa;
-  --focus: #1f6feb;
+  --accent-soft: #fdebe0;
+  --focus: #d94f00;
 
   --pass: #1d7a46;
   --block: #b42318;
@@ -33,32 +34,36 @@
   --deleted-fg: #a8251b;
   --invalid-bg: #fdecec;
   --invalid-fg: #b42318;
-  --readonly-fg: #6b7280;
-  --selected-bg: #e6effb;
-  --active-outline: #1f6feb;
+  --readonly-fg: #757575;
+  --selected-bg: #fdf0e8;
+  --active-outline: #d94f00;
 
-  --chip-bg: #eef1f5;
-  --chip-alias: #e9e5fb;
-  --chip-alias-fg: #4b3aa6;
-  --chip-iface: #e3f1f8;
-  --chip-iface-fg: #0e5a7d;
+  --chip-bg: #ececec;
+  --chip-alias: #fde3d3;
+  --chip-alias-fg: #a43a00;
+  --chip-iface: #e6e6e6;
+  --chip-iface-fg: #444444;
+
+  --header-bg: #2f2f2f;
+  --header-text: #eeeeee;
 
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #121417;
-  --surface: #1a1d22;
-  --surface-2: #1f2329;
-  --surface-3: #262b33;
-  --border: #2f353f;
-  --border-strong: #46505e;
-  --text: #e3e7ed;
-  --text-muted: #96a1b0;
-  --accent: #5b9bdc;
-  --accent-contrast: #0d1117;
-  --accent-soft: #1d2a3a;
-  --focus: #6aa8ff;
+  /* Dark: modelled on opnsense-dark. */
+  --bg: #1a1a1a;
+  --surface: #242424;
+  --surface-2: #2a2a2a;
+  --surface-3: #333333;
+  --border: #3b3b3b;
+  --border-strong: #555555;
+  --text: #e6e6e6;
+  --text-muted: #a3a3a3;
+  --accent: #f0661a;
+  --accent-contrast: #ffffff;
+  --accent-soft: #3a2517;
+  --focus: #ff8a47;
 
   --pass: #4cc38a;
   --block: #f2766b;
@@ -73,15 +78,18 @@
   --deleted-fg: #f28b82;
   --invalid-bg: #3a1a18;
   --invalid-fg: #f28b82;
-  --readonly-fg: #8b95a3;
-  --selected-bg: #1d2a3a;
-  --active-outline: #6aa8ff;
+  --readonly-fg: #8e8e8e;
+  --selected-bg: #3a2a20;
+  --active-outline: #ff8a47;
 
-  --chip-bg: #262b33;
-  --chip-alias: #2a2547;
-  --chip-alias-fg: #c3b8ff;
-  --chip-iface: #18303d;
-  --chip-iface-fg: #8fd0ef;
+  --chip-bg: #333333;
+  --chip-alias: #4a2a16;
+  --chip-alias-fg: #ffb98f;
+  --chip-iface: #3a3a3a;
+  --chip-iface-fg: #cfcfcf;
+
+  --header-bg: #121212;
+  --header-text: #eeeeee;
 
   color-scheme: dark;
 }
@@ -2029,4 +2037,49 @@ fieldset.svc-ro {
 .svc-head-actions {
   display: flex;
   gap: 8px;
+}
+
+
+/* ---------------------------------------------------------------- OPNsense look: dark header with an orange accent */
+.topbar {
+  --text: var(--header-text);
+  --text-muted: #b8b8b8;
+  --surface: #3d3d3d;
+  --surface-3: #4a4a4a;
+  --border: #555555;
+  --border-strong: #6b6b6b;
+  --accent-soft: rgba(217, 79, 0, 0.28);
+  background: var(--header-bg);
+  color: var(--header-text);
+  border-bottom: 1px solid #000;
+}
+.topbar .brand {
+  color: #ffffff;
+  border-right-color: #555555;
+}
+.topbar .tabs-nav button {
+  color: var(--header-text);
+}
+.topbar .tabs-nav button:hover {
+  background: #3d3d3d;
+}
+.topbar .tabs-nav button.active {
+  background: #3a3a3a;
+  border-bottom-color: #d94f00;
+}
+.topbar .link-button,
+.topbar a {
+  color: #ff9a5c;
+}
+.topbar button.primary:disabled {
+  opacity: 0.55;
+}
+.tree li button.active,
+.tabs-nav button.active {
+  color: inherit;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
 }
