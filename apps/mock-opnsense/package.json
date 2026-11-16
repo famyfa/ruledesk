@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@ruledeck/core": "*",
-    "fastify": "^5.12.7"
+    "fastify": "^5.12.8"
   },
   "license": "MIT"
 }
